@@ -1,0 +1,900 @@
+import Toybox.System;
+import Toybox.Lang;
+import Toybox.Math;
+import Toybox.Graphics;
+import Toybox.Application;
+import Toybox.Activity;
+import Toybox.Time;
+import Toybox.Time.Gregorian;
+import Toybox.Application.Storage;
+
+const MILE = 1.609344;
+const FEET = 3.281;
+
+var gCreateColors as Boolean = false;
+var gUseSetFillStroke as Boolean = false;
+
+function checkFeatures() as Void {
+  $.gCreateColors = Graphics has :createColor;
+  try {
+    $.gUseSetFillStroke = Graphics.Dc has :setStroke;
+    if ($.gUseSetFillStroke) {
+      $.gUseSetFillStroke = Graphics.Dc has :setFill;
+    }
+  } catch (ex) {
+    ex.printStackTrace();
+  }
+}
+
+function getActivityValue(
+  info as Activity.Info?,
+  symbol as Symbol,
+  dflt as Lang.Object
+) as Lang.Object {
+  if (info == null) {
+    return dflt;
+  }
+  var ainfo = info as Activity.Info;
+
+  if (ainfo has symbol) {
+    if (ainfo[symbol] != null) {
+      return ainfo[symbol] as Lang.Object;
+    }
+  }
+  return dflt;
+}
+
+// Given min and max value, calculate the perc of value in this range.
+function percentageOf(
+  value as Numeric?,
+  min as Numeric,
+  max as Numeric?
+) as Numeric {
+  if (value == null || max == null) {
+    return 0.0f;
+  }
+
+  if (max <= 0) {
+    return 0.0f;
+  }
+  var calculatedValue = value - min;
+  var calculatedMax = max - min;
+  if (calculatedMax <= 0) {
+    // min should be smaller than max
+    return 0.0f;
+  }
+
+  return calculatedValue / (calculatedMax / 100.0);
+}
+
+// function percentageOf(value as Numeric?, max as Numeric?) as Numeric {
+//   if (value == null || max == null) {
+//     return 0.0f;
+//   }
+//   if (max <= 0) {
+//     return 0.0f;
+//   }
+//   return value / (max / 100.0);
+// }
+
+function drawPercentageLine(
+  dc as Dc,
+  x as Number,
+  y as Number,
+  maxwidth as Number,
+  percentage as Numeric,
+  height as Number,
+  color as ColorType
+) as Void {
+  var wPercentage = (maxwidth / 100.0) * percentage;
+  dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+
+  if (wPercentage < 0) {
+    // Bar from left to right
+    dc.fillRectangle(x + maxwidth + wPercentage, y, -1 * wPercentage, height);
+  } else {
+    // From right to left
+    dc.fillRectangle(x, y, wPercentage, height);
+  }
+  dc.drawPoint(x + maxwidth, y);
+}
+
+function drawPercentageCircleTarget(
+  dc as Dc,
+  x as Number,
+  y as Number,
+  radius as Number,
+  perc as Numeric,
+  circleWidth as Number,
+  alpha as Number
+) as Void {
+  dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+  dc.drawCircle(x, y, radius);
+
+  setColorByPerc(dc, perc, alpha);
+  drawPercentageCircle(dc, x, y, radius, perc, circleWidth);
+
+  var percRemain = perc - 100;
+  var radiusInner = radius - circleWidth - 3;
+  while (percRemain > 0 && radiusInner > 0) {
+    setColorByPerc(dc, percRemain, alpha);
+    drawPercentageCircle(dc, x, y, radiusInner, percRemain, circleWidth);
+
+    radiusInner = radiusInner - circleWidth - 3;
+    percRemain = percRemain - 100;
+  }
+}
+
+function drawPercentageCircle(
+  dc as Dc,
+  x as Number,
+  y as Number,
+  radius as Number,
+  perc as Numeric,
+  penWidth as Number
+) as Void {
+  if (perc == null || perc == 0) {
+    return;
+  }
+
+  if (perc > 100) {
+    perc = 100;
+  }
+  var degrees = 3.6 * perc;
+
+  var degreeStart = 180; // 180deg == 9 o-clock
+  var degreeEnd = degreeStart - degrees; // 90deg == 12 o-clock
+
+  dc.setPenWidth(penWidth);
+  dc.drawArc(x, y, radius, Graphics.ARC_CLOCKWISE, degreeStart, degreeEnd);
+  dc.setPenWidth(1.0);
+}
+
+function fillPercentageCircle(
+  dc as Dc,
+  x as Number,
+  y as Number,
+  radius as Number,
+  perc as Numeric
+) as Void {
+  if (perc == null || perc == 0) {
+    return;
+  }
+
+  if (perc >= 100.0) {
+    dc.fillCircle(x, y, radius);
+    return;
+  }
+  var degrees = 3.6 * perc;
+
+  var degreeStart = 180; // 180deg == 9 o-clock
+  var degreeEnd = degreeStart - degrees; // 90deg == 12 o-clock
+
+  dc.setPenWidth(radius);
+  dc.drawArc(x, y, radius / 2, Graphics.ARC_CLOCKWISE, degreeStart, degreeEnd);
+  dc.setPenWidth(1.0);
+}
+
+function meterToFeet(meter as Numeric?) as Float {
+  if (meter == null) {
+    return 0.0f;
+  }
+  return (meter * FEET) as Float;
+}
+
+function kilometerToMile(km as Numeric?) as Float {
+  if (km == null) {
+    return 0.0f;
+  }
+  return (km / MILE) as Float;
+}
+
+function mpsToKmPerHour(metersPerSecond as Numeric?) as Float {
+  if (metersPerSecond == null) {
+    return 0.0f;
+  }
+  return ((metersPerSecond * 60 * 60) / 1000.0) as Float;
+}
+
+function getDistanceInMeterOrKm(distanceInMeters as Float) as Float {
+  if (distanceInMeters > 1000) {
+    return distanceInMeters / 1000.0f;
+  } else {
+    return distanceInMeters;
+  }
+}
+function getUnitsInMeterOrKm(distanceInMeters as Float) as String {
+  if (distanceInMeters > 1000) {
+    return "km";
+  } else {
+    return "m";
+  }
+}
+function getFormatForMeterAndKm(distanceInMeters as Float) as String {
+  if (distanceInMeters > 1000) {
+    return "%0.2f";
+  } else {
+    return "%0d";
+  }
+}
+
+function deg2rad(deg as Numeric) as Double or Float {
+  return deg * (Math.PI / 180);
+}
+
+function rad2deg(rad as Numeric) as Double or Float {
+  var deg = (rad * 180) / Math.PI;
+  if (deg < 0) {
+    deg += 360.0;
+  }
+  return deg as Double or Float;
+}
+
+// bearing in degrees
+function getCompassDirection(bearing as Numeric) as String {
+  var direction = "";
+  // Round and convert to number (1.00000 -> 1)
+  switch (Math.round(bearing / 22.5).toNumber()) {
+    case 1:
+      direction = "NNE";
+      break;
+    case 2:
+      direction = "NE";
+      break;
+    case 3:
+      direction = "ENE";
+      break;
+    case 4:
+      direction = "E";
+      break;
+    case 5:
+      direction = "ESE";
+      break;
+    case 6:
+      direction = "SE";
+      break;
+    case 7:
+      direction = "SSE";
+      break;
+    case 8:
+      direction = "S";
+      break;
+    case 9:
+      direction = "SSW";
+      break;
+    case 10:
+      direction = "SW";
+      break;
+    case 11:
+      direction = "WSW";
+      break;
+    case 12:
+      direction = "W";
+      break;
+    case 13:
+      direction = "WNW";
+      break;
+    case 14:
+      direction = "NW";
+      break;
+    case 15:
+      direction = "NNW";
+      break;
+    default:
+      direction = "N";
+  }
+
+  return direction;
+}
+
+// pascal -> mbar (hPa)
+function pascalToMilliBar(pascal as Numeric?) as Float {
+  if (pascal == null) {
+    return 0.0f;
+  }
+  return (pascal / 100.0) as Float;
+}
+
+function getMatchingFont(
+  dc as Dc,
+  fontList as Array,
+  maxWidth as Number,
+  maxHeight as Number,
+  text as String
+) as FontType {
+  var index = fontList.size() - 1;
+  var font = fontList[index] as FontType;
+  // System.println(Lang.format("text[$1$] max w[$2$]h[$3$]",[text, maxWidth, maxHeight]));
+  // wxh
+  var dimensions = dc.getTextDimensions(text, font);
+  // System.println(Lang.format(" dim w[$1$]h[$2$]",dimensions));
+  // while height or width of font too big, find another font
+  while ((dimensions[0] > maxWidth || dimensions[1] > maxHeight) && index > 0) {
+    index = index - 1;
+    font = fontList[index] as FontType;
+    dimensions = dc.getTextDimensions(text, font);
+    // System.println(Lang.format(" dim w[$1$]h[$2$]",dimensions));
+  }
+  // System.println("font index: " + index);
+  return font;
+}
+
+function cropTextToFit(
+  dc as Dc,
+  text as String,
+  font as FontType,
+  maxWidth as Number
+) as String {
+  var dimensions = dc.getTextDimensions(text, font);
+  if (dimensions[0] <= maxWidth) {
+    return text;
+  }
+
+  var croppedText = text;
+  while (dimensions[0] > maxWidth && croppedText.length() > 0) {
+    croppedText = croppedText.substring(0, croppedText.length() - 1);
+    dimensions = dc.getTextDimensions(croppedText + "..", font);
+  }
+  if (croppedText.length() == 0) {
+    return "";
+  }
+  return croppedText + "..";
+}
+
+function setColorByPerc(dc as Dc, perc as Numeric, alpha as Number) as Void {
+  var color = percentageToColor(perc, alpha, $.PERC_COLORS_SCHEME, 0);
+  if ($.gUseSetFillStroke) {
+    dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_TRANSPARENT);
+    dc.setFill(color);
+    dc.setStroke(color);
+  } else {
+    dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+  }
+}
+
+function setColorFillStroke(dc as Dc, color as Graphics.ColorType) as Void {
+  if ($.gUseSetFillStroke) {
+    dc.setColor(Graphics.COLOR_TRANSPARENT, Graphics.COLOR_TRANSPARENT);
+    dc.setFill(color);
+    dc.setStroke(color);
+    // System.println("fill and stroke?");
+  } else {
+    dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+  }
+}
+
+// [perc, R, G, B]
+// const PERC_COLORS_RED =
+//   [
+//     [0, 255, 255, 255],>
+//     [50, 155, 100, 100],
+//     [100, 255, 0, 0],
+//   ] as Array<Array<Number> >;
+const PERC_COLORS_GREEN_RED =
+  [
+    [0, 234, 250, 241],
+    [20, 46, 204, 113],
+    [40, 241, 196, 15],
+    [60, 243, 156, 18],
+    [80, 230, 116, 341],
+    [90, 211, 84, 0],
+    [100, 255, 0, 0],
+    [999, 0, 0, 0],
+  ] as Array<Array<Number> >;
+
+const PERC_COLORS_GREEN_TO_RED =
+  [
+    [0, 51, 255, 85], // malachite
+    [10, 85, 255, 51], // neon green
+    [15, 119, 255, 51], // lawn green
+    [20, 153, 255, 51], // green yellow
+    [30, 221, 255, 51], // pear
+    [40, 255, 255, 51], // yellow
+    [50, 255, 221, 51], // Banana yellow
+    [60, 255, 187, 51], // Saffron
+    [70, 255, 153, 51], // Deep saffron
+    [80, 255, 119, 51], // Mango tango
+    [90, 255, 85, 51], // portland orange
+    [100, 255, 51, 51], // deep carmine pink
+    [200, 128, 0, 0], // maroon
+    [999, 102, 0, 0], // rosewood
+  ] as Array<Array<Number> >;
+
+// https://rgbcolorcode.com/color/FF3333
+const PERC_COLORS_RED_TO_GREEN =
+  [
+    [0, 255, 51, 51], // deep carmine pink
+    [10, 255, 85, 51], // portland orange
+    [15, 255, 119, 51], // Mango tango
+    [20, 255, 153, 51], // Deep saffron
+    [30, 255, 187, 51], // Saffron
+    [40, 255, 221, 51], // Banana yellow
+    [50, 255, 255, 51], // yellow
+    [60, 221, 255, 51], // pear
+    [70, 153, 255, 51], // green yellow
+    [80, 119, 255, 51], // lawn green
+    [90, 85, 255, 51], // neon green
+    [100, 51, 255, 85], // malachite
+    [200, 51, 255, 255], // aqua
+    [999, 102, 25, 255], // han purple
+  ] as Array<Array<Number> >;
+
+const PERC_COLORS_SCHEME =
+  [
+    [0, 244, 244, 244],
+    [55, 233, 233, 247], // COLOR_WHITE_4
+    [65, 174, 214, 241], // COLOR_WHITE_BLUE_3
+    [70, 169, 204, 227], // COLOR_WHITE_DK_BLUE_3
+    [75, 163, 228, 215], // COLOR_WHITE_LT_GREEN_3
+    [80, 169, 223, 191], // COLOR_WHITE_GREEN_3
+    [85, 249, 231, 159], // COLOR_WHITE_YELLOW_3
+    [95, 250, 215, 160], // COLOR_WHITE_ORANGE_3
+    [100, 250, 229, 211], // COLOR_WHITE_ORANGERED_2
+    [105, 245, 203, 167], // COLOR_WHITE_ORANGERED_3
+    [115, 237, 187, 153], // COLOR_WHITE_ORANGERED2_3
+    [125, 245, 183, 177], // COLOR_WHITE_RED_3
+    [135, 230, 176, 170], // COLOR_WHITE_DK_RED_3
+    [145, 215, 189, 226], // COLOR_WHITE_PURPLE_3
+    [155, 210, 180, 222], // COLOR_WHITE_DK_PURPLE_3
+    [165, 187, 143, 206], // COLOR_WHITE_DK_PURPLE_4
+    [999, 0, 0, 0],
+  ] as Array<Array<Number> >;
+
+// alpha, 255 is solid, 0 is transparent
+function percentageToColor(
+  percentage as Numeric?,
+  alpha as Number,
+  colorScheme as Array<Array<Number> >,
+  shadePercentage as Number
+) as ColorType {
+  var pcolor = 0;
+  var pColors = colorScheme;
+  if (percentage == null) {
+    return Graphics.createColor(alpha, 255, 255, 255);
+  }
+
+  var i = 1;
+  while (i < pColors.size()) {
+    pcolor = pColors[i] as Array<Number>;
+    if (percentage <= pcolor[0]) {
+      break;
+    }
+    i++;
+  }
+  if (i >= pColors.size()) {
+    i = pColors.size() - 1;
+  }
+
+  var lower = pColors[i - 1];
+  var upper = pColors[i];
+  var range = upper[0] - lower[0];
+  var rangePct = 1;
+  if (range != 0) {
+    rangePct = (percentage - lower[0]) / range;
+  }
+  var pctLower = 1 - rangePct;
+  var pctUpper = rangePct;
+
+  var red = Math.floor(lower[1] * pctLower + upper[1] * pctUpper);
+  var green = Math.floor(lower[2] * pctLower + upper[2] * pctUpper);
+  var blue = Math.floor(lower[3] * pctLower + upper[3] * pctUpper);
+
+  // if (shadePercentage == 0) {
+  //   return Graphics.createColor(alpha, red.toNumber(), green.toNumber(), blue.toNumber());
+  // }
+  return shadeColor(alpha, red, green, blue, shadePercentage);
+}
+
+function min(valueA as Numeric, valueB as Numeric) as Numeric {
+  if (valueA > valueB) {
+    return valueB;
+  }
+  return valueA;
+}
+
+function max(valueA as Numeric, valueB as Numeric) as Numeric {
+  if (valueA > valueB) {
+    return valueA;
+  }
+  return valueB;
+}
+
+// percent > 0 lighten  color, percent < 0 darken
+function shadeColor(
+  alpha as Number,
+  red as Numeric,
+  green as Numeric,
+  blue as Numeric,
+  percent as Number
+) as ColorType {
+  if (percent != 0) {
+    // System.println(["shadeColor - 1", alpha, red, green, blue, percent]);
+    red = (red * (100 + percent)) / 100.0;
+    green = (green * (100 + percent)) / 100.0;
+    blue = (blue * (100 + percent)) / 100.0;
+
+    red = min(red, 255);
+    green = min(green, 255);
+    blue = min(blue, 255);
+    // System.println(["shadeColor - 2", alpha, red, green, blue, percent]);
+  }
+  return Graphics.createColor(
+    alpha,
+    red.toNumber(),
+    green.toNumber(),
+    blue.toNumber()
+  );
+}
+
+function transitionFromTo(
+  alpha as Number,
+  redFrom as Numeric,
+  greenFrom as Numeric,
+  blueFrom as Numeric,
+  redTo as Numeric,
+  greenTo as Numeric,
+  blueTo as Numeric,
+  percent as Number
+) as ColorType {
+  var factor = percent / 100;
+  var red = Math.round(redFrom + (redTo - redFrom) * factor);
+  var green = Math.round(greenFrom + (greenTo - greenFrom) * factor);
+  var blue = Math.round(blueFrom + (blueTo - blueFrom) * factor);
+
+  // System.println(["transitionFromTo", alpha, redFrom, greenFrom, blueFrom, redTo, greenTo, blueTo, percent, "%", red, green, blue]);
+
+  return Graphics.createColor(
+    alpha,
+    red.toNumber(),
+    green.toNumber(),
+    blue.toNumber()
+  );
+}
+// function transitionToRed(percent) {
+//     // Starting color: rgb(230, 220, 55)
+//     // Target color:   rgb(255, 0, 0)
+
+//     const factor = percent / 100;
+
+//     const r = Math.round(255 + (230 - 255) * factor);
+//     const g = Math.round(0 + (220 - 0) * factor);
+//     const b = Math.round(0 + (55 - 0) * factor);
+
+//     return `rgb(${r}, ${g}, ${b})`;
+// }
+
+function getSecondsToNext(
+  momentStart as Moment?,
+  momentNext as Moment?
+) as Number {
+  if (momentStart == null || momentNext == null) {
+    return 0;
+  }
+  // remainingSeconds
+  return momentNext.value() - momentStart.value();
+}
+
+// template: "{h}:{m}:{s}:{ms}"
+function millisecondsToShortTimeString(
+  totalMilliSeconds as Numeric?,
+  template as String
+) as String {
+  if (totalMilliSeconds == null) {
+    return "";
+  }
+
+  var totalMilliSecondsInt = totalMilliSeconds.toNumber();
+
+  var hours = (totalMilliSecondsInt / 3600000) % 24; // (1000 * 60 * 60)
+  var minutes = (totalMilliSecondsInt / 60000) % 60; // (1000 * 60)
+  var seconds = (totalMilliSecondsInt / 1000) % 60;
+  var mseconds = totalMilliSecondsInt % 1000;
+
+  if (template.length() == 0) {
+    template = "{h}:{m}:{s}:{ms}";
+  }
+  var time = stringReplace(template, "{h}", hours.format("%01d"));
+  time = stringReplace(time, "{m}", minutes.format("%02d"));
+  time = stringReplace(time, "{s}", seconds.format("%02d"));
+  time = stringReplace(time, "{ms}", mseconds.format("%03d"));
+
+  return time;
+}
+
+// 1:40 or 150:40
+function secondsToCompactTimeString(
+  totalSeconds as Numeric?,
+  template as String
+) as String {
+  if (totalSeconds == null) {
+    return "";
+  }
+  // Force conversion to a standard integer Number to prevent UnexpectedTypeException
+  var totalSecondsInt = totalSeconds.toNumber();
+
+  var minutes = totalSecondsInt / 60;
+  var timeString = stringReplace(template, "{m}", minutes.format("%01d"));
+
+  var seconds = totalSecondsInt % 60;
+  timeString = stringReplace(timeString, "{s}", seconds.format("%02d"));
+
+  return timeString;
+}
+
+// 1:40 or 150:40 (if no {h} in template)
+function secondsToHourMinutes(totalSeconds as Numeric?) as String {
+  if (totalSeconds == null) {
+    return "";
+  }
+
+  // Force conversion to a standard integer Number to prevent UnexpectedTypeException
+  var totalSecondsInt = totalSeconds.toNumber();
+
+  var timeString = "{h}:{m}";
+  // Pure integer division for hours
+  var hours = totalSecondsInt / 3600;
+  timeString = $.stringReplace(timeString, "{h}", hours.format("%01d"));
+
+  // Get total remaining minutes, then modulo 60 using integers
+  var minutes = (totalSecondsInt / 60) % 60;
+  timeString = $.stringReplace(timeString, "{m}", minutes.format("%02d"));
+
+  return timeString;
+}
+function secondsToHourMinutesSeconds(totalSeconds as Numeric?) as String {
+  if (totalSeconds == null) {
+    return "";
+  }
+
+  // Force conversion to a standard integer Number to prevent UnexpectedTypeException
+  var totalSecondsInt = totalSeconds.toNumber();
+
+  var timeString = "{h}:{m}:{s}";
+  // Pure integer division for hours
+  var hours = totalSecondsInt / 3600;
+  timeString = $.stringReplace(timeString, "{h}", hours.format("%01d"));
+
+  // Get total remaining minutes, then modulo 60 using integers
+  var minutes = (totalSecondsInt / 60) % 60;
+  timeString = $.stringReplace(timeString, "{m}", minutes.format("%02d"));
+
+  var seconds = totalSecondsInt % 60;
+  timeString = $.stringReplace(timeString, "{s}", seconds.format("%02d"));
+
+  return timeString;
+}
+function getShortTimeString(moment as Time.Moment?) as String {
+  if (moment != null && moment instanceof Time.Moment) {
+    var date = Gregorian.info(moment, Time.FORMAT_SHORT);
+    return date.hour.format("%02d") + ":" + date.min.format("%02d");
+  }
+  return "";
+}
+
+function getLongTimeString(moment as Time.Moment?) as String {
+  if (moment != null && moment instanceof Time.Moment) {
+    var date = Gregorian.info(moment, Time.FORMAT_SHORT);
+    return (
+      date.day.format("%02d") +
+      "-" +
+      date.month.format("%02d") +
+      "-" +
+      date.year.format("%02d") +
+      " " +
+      date.hour.format("%02d") +
+      ":" +
+      date.min.format("%02d")
+    );
+  }
+  return "";
+}
+
+function stringReplace(
+  str as String,
+  oldString as String,
+  newString as String
+) as String {
+  //str = str.toString(); // @@ TODO why crash here? -> because of too many nested function calls?
+  if (str.length() == 0 || oldString.length() == 0) {
+    return str;
+  }
+
+  var result = str;
+  var index = result.find(oldString);
+  var count = 0;
+  while (index != null && count < 30) {
+    var indexEnd = index + oldString.length();
+    var res =
+      result.substring(0, index) +
+      newString +
+      result.substring(indexEnd, result.length());
+    result = res;
+    index = result.find(oldString);
+    count = count + 1;
+  }
+
+  return result;
+}
+
+function stringLeft(str as String, marker as String, dflt as String) as String {
+  if (str.length() == 0 || marker.length() == 0) {
+    return dflt;
+  }
+
+  var index = str.find(marker);
+  if (index == null) {
+    return dflt;
+  }
+  return str.substring(0, index) as String;
+}
+
+function stringRight(
+  str as String,
+  marker as String,
+  dflt as String
+) as String {
+  if (str.length() == 0 || marker.length() == 0) {
+    return dflt;
+  }
+
+  var index = str.find(marker);
+  if (index == null || index + 1 >= str.length()) {
+    return dflt;
+  }
+  return str.substring(index + 1, str.length()) as String;
+}
+
+function pointOnCircle_x(
+  x as Number,
+  y as Number,
+  radius as Number,
+  angleInDegrees as Number
+) as Number {
+  // Convert from degrees to radians
+  return (radius * Math.cos(deg2rad(angleInDegrees)) + x).toNumber();
+}
+function pointOnCircle_y(
+  x as Number,
+  y as Number,
+  radius as Number,
+  angleInDegrees as Number
+) as Number {
+  // Convert from degrees to radians
+  return (radius * Math.sin(deg2rad(angleInDegrees)) + y).toNumber();
+}
+
+function convertToNumber(value as String, defaultValue as Number) as Number {
+  var converted = value.toNumber();
+  if (converted == null) {
+    return defaultValue;
+  }
+  return converted;
+}
+
+function hasLowMemory() as Boolean {
+  var settings = System.getDeviceSettings();
+  var partNumber = settings.partNumber();
+  System.println(["Partnumber", partNumber]);
+
+  //006-B3122-00 Edge830
+  //006-B2713-00 Edge1030
+  //006-B3843-00 Edge1040
+  return partNumber.equals("006-B2713-00");
+}
+
+function drawUpTriangle(dc as Dc, x as Number, y as Number, size as Number) {
+    var half = size / 2;
+    var points = [
+        [x, y - half],         // Top vertex
+        [x + half, y + half],  // Bottom right vertex
+        [x - half, y + half]   // Bottom left vertex
+    ];
+    dc.fillPolygon(points);
+}
+
+function drawDownTriangle(dc as Dc, x as Number, y as Number, size as Number) {
+    var half = size / 2;
+    var points = [
+        [x - half, y - half],  // Top left vertex
+        [x + half, y - half],  // Top right vertex
+        [x, y + half]          // Bottom vertex
+    ];
+    dc.fillPolygon(points);
+}
+
+function drawSteadyCircle(dc as Dc, x as Number, y as Number, size as Number) {
+    dc.setPenWidth(2);
+    dc.drawCircle(x, y, size / 3); 
+    dc.setPenWidth(1);
+}
+
+function splitStringAtDot(str as String) as [String, String] {
+    var dotIndex = str.find(".");
+    if (dotIndex != null) {
+        var whole = str.substring(0, dotIndex);
+        var fraction = str.substring(dotIndex + 1, str.length());
+        return [whole, fraction];
+    }
+    return [str, "00"]; // Fallback if no dot found
+}
+
+function StorageSetValue(
+  key as Application.PropertyKeyType,
+  value as Application.PropertyValueType
+) as Void {
+  try {
+    //System.println(["StorageSetValue key: ", key, " value: ", value]);
+    Toybox.Application.Storage.setValue(key, value);
+  } catch (ex) {
+    ex.printStackTrace();
+  }
+}
+
+// Note key contains `storageKey|index` or `storageKey`
+function getStorageValue(
+  key as Application.PropertyKeyType,
+  dflt as Application.PropertyValueType
+) as Application.PropertyValueType {
+  try {
+    // Check if key contains index (for array)
+    var idx = stringRight(key, "|", "").toNumber();
+    if (idx == null || idx == "") {
+      // System.println(["getStorageValue key", key]);
+      var val = Toybox.Application.Storage.getValue(key);
+      if (val != null) {
+        return val;
+      }
+      return dflt;
+    }
+
+    // Get the value from the stored array
+    var storageKey = stringLeft(key, "|", key);
+    // System.println(["getStorageValue storageKey", storageKey]);
+    var array = Toybox.Application.Storage.getValue(storageKey);
+    if (array != null) {
+      if (idx > -1 && idx < array.size()) {
+        return array[idx];
+      }
+    }
+  } catch (ex) {
+    return dflt;
+  }
+  return dflt;
+}
+
+function drawDemoBackground(dc as Dc, width as Number, height as Number, demoDuration as Number, totalActiveSeconds as Number) as Void {
+    // 1. Calculate how many seconds are left in our 6-minute (360s) test loop
+    var secondsLeft = demoDuration - totalActiveSeconds;
+    if (secondsLeft < 0) { secondsLeft = 0; }
+
+    System.println(["Demo seconds left", secondsLeft]);
+
+    var centerX = width / 2;
+    var centerY = height / 2;
+    var radius = (height * 0.38).toNumber(); // Fits just outside your centered data
+
+    // 2. Draw a faint, dark grey background track circle
+    dc.setPenWidth(3);
+    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+    dc.drawCircle(centerX, centerY, radius);
+
+    // 3. Draw the active remaining time arc (e.g., in a muted blue or purple)
+    // Monkey C drawArc uses degrees (0-360) starting from the right side counter-clockwise
+    if (secondsLeft > 0) {
+        var progressPercent = secondsLeft.toFloat() / demoDuration.toFloat();
+        var endAngle = (progressPercent * 360).toNumber();
+        
+        dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
+        dc.drawArc(centerX, centerY, radius, Graphics.ARC_COUNTER_CLOCKWISE, 0, endAngle);
+    }
+
+    // 4. Print a subtle "DEMO" watermark text at the top center
+    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+    
+    // Format seconds left into MM:SS
+    var minutes = secondsLeft / 60;
+    var seconds = secondsLeft % 60;
+    var countdownStr = "DEMO MODE - " + minutes.format("%d") + ":" + seconds.format("%02d");
+    
+    dc.drawText(centerX, (height * 0.02).toNumber(), Graphics.FONT_XTINY, countdownStr, Graphics.TEXT_JUSTIFY_CENTER);
+}
