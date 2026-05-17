@@ -1,3 +1,9 @@
+readme
+
+if ok -> hide gray bar
+demo mode -> circle background transparant.
+beep on warning?
+
 # ConnectIQ Datafield displaying Cardio Efficiency, Pacing Smoothness and Torque.
 
 Calc current EF, VI, Torque

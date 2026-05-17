@@ -100,7 +100,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             $.gExitedMenu = false;
         }
 
-        var backgroundColor = getBackgroundColor();
+        var backgroundColor = getBackgroundColorOrWarningColor();
         dc.setColor(backgroundColor, backgroundColor);
         dc.clear();
         mDarkBackground = backgroundColor == Graphics.COLOR_BLACK;
@@ -122,12 +122,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
         drawTrends(dc);
     }
 
-    function getBackgroundColor() as ColorType {
-        // Use dark background if any serious alerts, otherwise light background
+    function getBackgroundColorOrWarningColor() as ColorType {
+        var darkMode = getBackgroundColor() == Graphics.COLOR_BLACK;
+
+        // Use inverted background if any serious alerts, otherwise normal background
         if (mCycloData.TrendEF == -1 || mCycloData.TrendTorque == -1) {
-            return Graphics.COLOR_BLACK;
+            return darkMode ? Graphics.COLOR_WHITE : Graphics.COLOR_BLACK;
         } else {
-            return Graphics.COLOR_WHITE;
+            return darkMode ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
         }
     }
     function drawTrends(dc as Dc) as Void {
@@ -185,33 +187,34 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // 0. DRAW THE BOTTOM WARNING BAR - so its in the background.
         updateWarningMessage(trendEF, trendVI, trendTorque);
+        if (mWarningMessage.length() > 0) {
+            var barHeight = (height * 0.16).toNumber();
+            if (mEf == EfSmall) {
+                // 2 lines on small field
+                barHeight = barHeight * 2;
+            }
+            var barY = height - barHeight;
 
-        var barHeight = (height * 0.16).toNumber();
-        if (mEf == EfSmall) {
-            // 2 lines on small field
-            barHeight = barHeight * 2;
+            // Draw the background bounding block for the alert
+            dc.setColor(mWarningColor, mWarningColor);
+            dc.fillRectangle(0, barY, width, barHeight);
+
+            // Use dark text on light alerts (Yellow) and white text on Red alerts
+            if (mWarningColor == Graphics.COLOR_YELLOW) {
+                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+            } else {
+                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            }
+
+            var fontWarning = Graphics.FONT_XTINY;
+            dc.drawText(
+                width / 2,
+                barY + barHeight / 2, // / 4,
+                fontWarning,
+                mWarningMessage,
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+            );
         }
-        var barY = height - barHeight;
-
-        // Draw the background bounding block for the alert
-        dc.setColor(mWarningColor, mWarningColor);
-        dc.fillRectangle(0, barY, width, barHeight);
-
-        // Use dark text on light alerts (Yellow) and white text on Red alerts
-        if (mWarningColor == Graphics.COLOR_YELLOW) {
-            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-        } else {
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        }
-
-        var fontWarning = Graphics.FONT_XTINY;
-        dc.drawText(
-            width / 2,
-            barY + barHeight / 2, // / 4,
-            fontWarning,
-            mWarningMessage,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
-        );
         // ---
 
         // --- ROW 1: EF ---
@@ -480,7 +483,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         trendVI as Number,
         trendTorque as Number
     ) as Void {
-        var sep = "";
+        var sep = " ";
         if (mEf == EfSmall) {
             // Small screen - 2 lines of warning message
             sep = "\n";

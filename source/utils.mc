@@ -783,39 +783,39 @@ function hasLowMemory() as Boolean {
 }
 
 function drawUpTriangle(dc as Dc, x as Number, y as Number, size as Number) {
-    var half = size / 2;
-    var points = [
-        [x, y - half],         // Top vertex
-        [x + half, y + half],  // Bottom right vertex
-        [x - half, y + half]   // Bottom left vertex
-    ];
-    dc.fillPolygon(points);
+  var half = size / 2;
+  var points = [
+    [x, y - half], // Top vertex
+    [x + half, y + half], // Bottom right vertex
+    [x - half, y + half], // Bottom left vertex
+  ];
+  dc.fillPolygon(points);
 }
 
 function drawDownTriangle(dc as Dc, x as Number, y as Number, size as Number) {
-    var half = size / 2;
-    var points = [
-        [x - half, y - half],  // Top left vertex
-        [x + half, y - half],  // Top right vertex
-        [x, y + half]          // Bottom vertex
-    ];
-    dc.fillPolygon(points);
+  var half = size / 2;
+  var points = [
+    [x - half, y - half], // Top left vertex
+    [x + half, y - half], // Top right vertex
+    [x, y + half], // Bottom vertex
+  ];
+  dc.fillPolygon(points);
 }
 
 function drawSteadyCircle(dc as Dc, x as Number, y as Number, size as Number) {
-    dc.setPenWidth(2);
-    dc.drawCircle(x, y, size / 3); 
-    dc.setPenWidth(1);
+  dc.setPenWidth(2);
+  dc.drawCircle(x, y, size / 3);
+  dc.setPenWidth(1);
 }
 
 function splitStringAtDot(str as String) as [String, String] {
-    var dotIndex = str.find(".");
-    if (dotIndex != null) {
-        var whole = str.substring(0, dotIndex);
-        var fraction = str.substring(dotIndex + 1, str.length());
-        return [whole, fraction];
-    }
-    return [str, "00"]; // Fallback if no dot found
+  var dotIndex = str.find(".");
+  if (dotIndex != null) {
+    var whole = str.substring(0, dotIndex);
+    var fraction = str.substring(dotIndex + 1, str.length());
+    return [whole, fraction];
+  }
+  return [str, "00"]; // Fallback if no dot found
 }
 
 function StorageSetValue(
@@ -862,39 +862,61 @@ function getStorageValue(
   return dflt;
 }
 
-function drawDemoBackground(dc as Dc, width as Number, height as Number, demoDuration as Number, totalActiveSeconds as Number) as Void {
-    // 1. Calculate how many seconds are left in our 6-minute (360s) test loop
-    var secondsLeft = demoDuration - totalActiveSeconds;
-    if (secondsLeft < 0) { secondsLeft = 0; }
+function drawDemoBackground(
+  dc as Dc,
+  width as Number,
+  height as Number,
+  demoDuration as Number,
+  totalActiveSeconds as Number
+) as Void {
+  // 1. Calculate how many seconds are left in our 6-minute (360s) test loop
+  var secondsLeft = demoDuration - totalActiveSeconds;
+  if (secondsLeft < 0) {
+    secondsLeft = 0;
+  }
 
-    System.println(["Demo seconds left", secondsLeft]);
+  //System.println(["Demo seconds left", secondsLeft]);
 
-    var centerX = width / 2;
-    var centerY = height / 2;
-    var radius = (height * 0.38).toNumber(); // Fits just outside your centered data
+  var centerX = width / 2;
+  var centerY = height / 2;
+  var radius = (height * 0.34).toNumber(); // Fits just outside your centered data
 
-    // 2. Draw a faint, dark grey background track circle
-    dc.setPenWidth(3);
-    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.drawCircle(centerX, centerY, radius);
+  // 2. Draw a faint, dark grey background track circle
+  dc.setPenWidth(3);
+  dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+  dc.drawCircle(centerX, centerY, radius);
 
-    // 3. Draw the active remaining time arc (e.g., in a muted blue or purple)
-    // Monkey C drawArc uses degrees (0-360) starting from the right side counter-clockwise
-    if (secondsLeft > 0) {
-        var progressPercent = secondsLeft.toFloat() / demoDuration.toFloat();
-        var endAngle = (progressPercent * 360).toNumber();
-        
-        dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
-        dc.drawArc(centerX, centerY, radius, Graphics.ARC_COUNTER_CLOCKWISE, 0, endAngle);
-    }
+  // 3. Draw the active remaining time arc (e.g., in a muted blue or purple)
+  // Monkey C drawArc uses degrees (0-360) starting from the right side counter-clockwise
+  if (secondsLeft > 0) {
+    var progressPercent = secondsLeft.toFloat() / demoDuration.toFloat();
+    var endAngle = (progressPercent * 360).toNumber();
 
-    // 4. Print a subtle "DEMO" watermark text at the top center
-    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-    
-    // Format seconds left into MM:SS
-    var minutes = secondsLeft / 60;
-    var seconds = secondsLeft % 60;
-    var countdownStr = "DEMO MODE - " + minutes.format("%d") + ":" + seconds.format("%02d");
-    
-    dc.drawText(centerX, (height * 0.02).toNumber(), Graphics.FONT_XTINY, countdownStr, Graphics.TEXT_JUSTIFY_CENTER);
+    dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
+    dc.drawArc(
+      centerX,
+      centerY,
+      radius,
+      Graphics.ARC_COUNTER_CLOCKWISE,
+      0,
+      endAngle
+    );
+  }
+
+  // 4. Print a subtle "DEMO" watermark text at the top center
+  dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+
+  // Format seconds left into MM:SS
+  var minutes = secondsLeft / 60;
+  var seconds = secondsLeft % 60;
+  var countdownStr =
+    "DEMO MODE - " + minutes.format("%d") + ":" + seconds.format("%02d");
+
+  dc.drawText(
+    centerX,
+    (height * 0.02).toNumber(),
+    Graphics.FONT_XTINY,
+    countdownStr,
+    Graphics.TEXT_JUSTIFY_CENTER
+  );
 }
