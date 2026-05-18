@@ -6,6 +6,7 @@ import Toybox.UserProfile;
 class TrendEngine {
     var buffer180 as Number = 180; // 3 minutes
     var lockStep1800 as Number = 1800; // 30 minutes in seconds
+    var hasFirstBaseline = false;
 
     var powerHistory as Array<Number> = new [buffer180];
     var hrHistory as Array<Number> = new [buffer180];
@@ -28,11 +29,14 @@ class TrendEngine {
     var trendTorque as Number = 0;
 
     var useDemoData as Boolean = false;
+
     // TODO
     var maxTorque as Float = 0.0f;
-    var maxPower as Number = 0;
-    var maxCadence as Number = 0;
-    var maxHeartRate as Number = 0;
+
+    var previousPower as Float = 0.0f;
+    var previousHR as Float = 0.0f;
+    var previousTorque as Float = 0.0f;
+    var previousEF as Float = 0.0f;
 
     function initialize() {
         AppBase.initialize();
@@ -51,36 +55,31 @@ class TrendEngine {
     function setDemo(isDemo as Boolean) as Void {
         useDemoData = isDemo;
         if (isDemo) {
-            buffer180 = 180;
             lockStep1800 = 180;
         }
         reset();
     }
-    function setDefaults() as Void {
-        buffer180 = 180;
-        lockStep1800 = 1800;
-        reset();
+    function setLockWindowSec(lockWindowSec as Number) as Void {
+        lockStep1800 = lockWindowSec;
+    }
+  
+    function getNormalizedPower() as Number {
+        return globalNP;
     }
 
-    // Default buffer 3 minutes (180 seconds) and lock step of 30 minutes (1800 seconds)
-    function setBufferAndLockStepSize(
-        bufferSize as Number,
-        lockStepSize as Number
-    ) as Void {
-        buffer180 = bufferSize;
-        lockStep1800 = lockStepSize;
-        reset();
-    }
-
-    // Calculated per second
+    // Calculated per second, when activity paused, do not compute!
     function compute(
         cadence as Number,
         power as Number,
         heartRate as Number
     ) as Array<Float or Number>? {
-        // System.println(
-        //     "Received Data - Power: " + power + "W, Cadence: " + cadence + "RPM, Heart Rate: " + heartRate + "bpm"
-        // );
+        // Skip TQ calculation if power is 0
+        // Skip EF calculation if power is 0
+        // Keep VI calculation if power is 0 or HR is 0 Because average power must include 0 values
+
+        // Update global NP tracking
+        globalNP = calculateNormalizedPower(calculatePower30(power));
+        // System.println(["Global NP", globalNP]);
 
         // 1. Calculate Instantaneous Torque (Nm)
         var currentTorque = 0.0;
@@ -91,9 +90,10 @@ class TrendEngine {
             if (currentTorque > maxTorque) {
                 maxTorque = currentTorque;
             }
+            // System.println(["Power", power, "angularVelocity", angularVelocity, "Torque", currentTorque]);
         }
 
-        // 2. Feed the 180-second Rolling Buffers
+        // 2. Feed the 180-second Rolling Buffers (not ignoring the zeros)
         powerHistory[writeIndex] = power;
         hrHistory[writeIndex] = heartRate;
         torqueHistory[writeIndex] = currentTorque;
@@ -107,44 +107,81 @@ class TrendEngine {
         // 3. Process actual rolling metrics (>Only if we have data)
         var limit = isBufferFull ? buffer180 : writeIndex;
         if (limit < 10) {
+            // Wait for baseline data
             return null;
-        } // Wait for baseline data
+        }
 
-        var sumPower = 0.0;
-        var sumHR = 0.0;
-        var sumTorque = 0.0;
+        var sumPowerForVI = 0.0; // Includes zeros
+        var sumPowerForEF = 0.0; // Excludes zeros
+        var sumHRForEF = 0.0; // Excludes zeros
+        var sumTorque = 0.0; // Excludes zeros
 
-        // Mathematical variables for rolling VI
-        // var sumOfFourths = 0.0;
+        var validEffortCount = 0; // Counts how many seconds we were actually pedaling
 
+        // Unified loop to compute sums for all metrics
         for (var i = 0; i < limit; i++) {
-            sumPower += powerHistory[i];
-            sumHR += hrHistory[i];
-            sumTorque += torqueHistory[i];
+            var p = powerHistory[i];
+
+            // Global tracking for VI (Must include zeros)
+            sumPowerForVI += p;
+
+            // Conditional filtering for EF and Torque (Skip zeros)
+            if (p > 0) {
+                sumPowerForEF += p;
+                sumHRForEF += hrHistory[i];
+                sumTorque += torqueHistory[i];
+                validEffortCount++;
+            }
         }
 
         // Compute Actual 3-Min Averages
-        var actualPower = sumPower / limit;
-        var actualHR = sumHR / limit;
-        var actualTorque = sumTorque / limit;
-        var actualEF = actualHR > 0 ? actualPower / actualHR : 0.0;
-
-        // Approximate rolling VI over the 3-minute window
+        // Pacing (VI) uses the full time window
+        var actualPowerGlobal = sumPowerForVI / limit;
         // For a 3-minute window, a rough 4th-power scaling works well for pacing trends
-        var actualVI = 1.0;
-        var actualNP = 0;
-        if (actualPower > 0) {
-            actualNP = calculateNormalizedPower(calculatePower30(power));
-            actualVI = actualNP / actualPower;
+        var actualVI = calculateRollingVI(actualPowerGlobal);
+
+        var actualPower;
+        var actualHR;
+        var actualTorque;
+        var actualEF;
+        // Efficiency (EF) and Mechanics (Torque) only use working seconds
+        if (validEffortCount >= 5) {
+            // Ensure we have a tiny bit of pedaling data
+            actualPower = sumPowerForEF / validEffortCount;
+            actualHR = sumHRForEF / validEffortCount;
+            actualTorque = sumTorque / validEffortCount;
+            actualEF = actualHR > 0 ? actualPower / actualHR : 0.0;
+            previousPower = actualPower;
+            previousHR = actualHR;
+            previousTorque = actualTorque;
+            previousEF = actualEF;
+        } else {
+            // If they coasted for almost the entire last 3 minutes,
+            // hold the previous valid calculation to prevent diving to 0
+            actualPower = previousPower;
+            actualHR = previousHR;
+            actualTorque = previousTorque;
+            actualEF = previousEF;
         }
 
-        // 4. THE 30-MINUTE LOCK TRIGGER
-        // 30 minutes = 1800 seconds
-        if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
+        // Approximate rolling VI over the 3-minute window
+
+        // 4. THE 3-MINUTE (buffer full) AND 30-MINUTE LOCK TRIGGER
+        if (!hasFirstBaseline && isBufferFull) {
+            hasFirstBaseline = true;
+            lockedEF = actualEF;
+            lockedVI = actualVI;
+            lockedTorque = actualTorque;
+            if (methodBlockCompleted != null) {
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+            }
+        }
+        else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
             System.println("LOCKING TREND SNAPSHOT");
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTorque = actualTorque;
+
             if (methodBlockCompleted != null) {
                 methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
             }
@@ -175,7 +212,7 @@ class TrendEngine {
             else {
                 trendVI = 0; // Stable
             }
-            
+
             // Torque Trend: Dropping torque at the same power means user is shifting to a spinning cadence
             // A 10% increase at the same power output means their cadence has dropped by roughly 8–10 RPM, meaning they are starting to bog down and drag their legs.
             if (actualTorque > lockedTorque * 1.1) {
@@ -196,7 +233,7 @@ class TrendEngine {
             //         trendEF
             // );
             // System.println(
-            //     "Locked VI: " +
+            //     "Locked VI: " +The 3-Minute (180s) Milestone
             //         lockedVI.format("%.2f") +
             //         ", Actual VI: " +
             //         actualVI.format("%.2f") +
@@ -213,7 +250,86 @@ class TrendEngine {
             // );
         }
 
-        return [actualEF, actualVI, actualTorque, trendEF, trendVI, trendTorque];
+        return [
+            actualEF,
+            actualVI,
+            actualTorque,
+            trendEF,
+            trendVI,
+            trendTorque,
+        ];
+    }
+
+    function calculateRollingVI(avgPower as Float) as Float {
+        // Prevent division by zero if the rider is completely stopped/coasting
+        if (avgPower <= 0.0) {
+            return 1.0;
+        }
+
+        var maxElements = isBufferFull ? 180 : writeIndex;
+
+        // Safety check: We need at least 30 seconds of data to compute a valid NP baseline
+        if (maxElements < 30) {
+            return 1.0;
+        }
+
+        var sumFourthPower = 0.0;
+        var stepCount = 0;
+
+        // Step 1 & 2: Loop through the 180s buffer using 30-second discrete blocks
+        // This replicates the 30-second physiological smoothing window
+        for (var i = 0; i <= maxElements - 30; i += 5) {
+            // Step by 5 seconds to get a clean rolling sample
+            var chunkSum = 0.0;
+
+            // Sum a 30-second block of power
+            for (var j = 0; j < 30; j++) {
+                chunkSum += powerHistory[i + j];
+            }
+
+            // Calculate the average for this 30-second block
+            var avg30s = chunkSum / 30.0;
+
+            // Raise that 30s average to the 4th power to heavily penalize surges
+            var fourthPower = avg30s * avg30s * avg30s * avg30s;
+
+            sumFourthPower += fourthPower;
+            stepCount++;
+        }
+
+        if (stepCount == 0) {
+            return 1.0;
+        }
+
+        // Step 3: Average the 4th power values
+        var meanFourthPower = sumFourthPower / stepCount;
+
+        // Step 4: Take the 4th root to convert back to Watts (Normalized Power)
+        // Monkey C doesn't have a native Math.root4(), so we use Math.pow(x, 0.25)
+        var rollingNP = Math.pow(meanFourthPower, 0.25);
+
+        // Step 5: Calculate and return Variability Index
+        var rollingVI = rollingNP / avgPower;
+
+        // Cap the minimum at 1.00 (Math anomalies can occasionally cause 0.999)
+        if (rollingVI < 1.0) {
+            rollingVI = 1.0;
+        }
+
+        return rollingVI;
+    }
+
+    function getSecondsToNextLock() as Number {
+        if (elapsedSeconds == 0) {
+            return buffer180;
+        }
+        if (!hasFirstBaseline) {
+            // If we haven't even established our first baseline, show a countdown to that instead (180s)
+            var secondsIntoCurrentBlock = elapsedSeconds % buffer180;
+            return buffer180 - secondsIntoCurrentBlock;
+        }
+        var secondsIntoCurrentBlock = elapsedSeconds % lockStep1800;
+        return lockStep1800 - secondsIntoCurrentBlock;
     }
 
     function getTrends() as Array<Number> {
@@ -242,6 +358,7 @@ class TrendEngine {
         torqueHistory = new [buffer180];
         writeIndex = 0;
         isBufferFull = false;
+        hasFirstBaseline = false;
         elapsedSeconds = 0;
         lockedEF = 0.0f;
         lockedVI = 0.0f;
@@ -249,15 +366,30 @@ class TrendEngine {
         trendEF = 0;
         trendVI = 0;
         trendTorque = 0;
+        // Rest global NP tracking
+        // mPowerTicks = 0;
+        globalNP = 0;
     }
+
+    // hidden var mPowerTicks as Number = 0;
+    // hidden function addAverageNP(
+    //     averagePower as Double,
+    //     power as Number or Double
+    // ) as Double {
+    //     // [ avg' * (n-1) + x ] / n
+    //     mPowerTicks = mPowerTicks + 1;
+    //     averagePower =
+    //         (averagePower * (mPowerTicks - 1) + power) / mPowerTicks.toDouble();
+
+    //     // System.println(Lang.format("p $1$ ticks $2$ avg $3$", [power, mPowerTicks, averagePower]));
+    //     return averagePower;
+    // }
 
     // Normalized power
     hidden var mPowerDataPer30Sec as Array<Number> = [] as Array<Number>;
     hidden var mAvgPowerToFourthPer30Sec as Array<Decimal> =
         [] as Array<Decimal>;
-    hidden var mNPSkipZero as Boolean = false;
-    hidden var mPowerTicks as Number = 0;
-    hidden var mCurrentNP as Double = 0.0d;
+    hidden var globalNP as Number = 0;
 
     hidden function calculateNormalizedPower(PowerPer30 as Number) as Number {
         if (mAvgPowerToFourthPer30Sec.size() >= 30) {

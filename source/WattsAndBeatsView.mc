@@ -17,6 +17,11 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mActivityStarted as Boolean = false;
     hidden var mBlockCompletedCounter as Number = 0;
 
+    hidden var mFirstBlockEF as Float = -1.0f;
+    hidden var mLatestBlockEF as Float = 0.0f;
+    hidden var mAveragePower as Number = 0;
+    hidden var mAverageCadence as Number = 0;
+
     function initialize() {
         DataField.initialize();
         mTrendEngine = getTrendEngine();
@@ -30,6 +35,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
         mCycloData.LockedVI = data[1];
         mCycloData.LockedTorque = data[2];
 
+        if (mFirstBlockEF < 0) {
+            mFirstBlockEF = data[0];
+        }
+        mLatestBlockEF = data[0];
         mBlockCompletedCounter = mBlockCompletedCounter + 1;
     }
 
@@ -47,15 +56,28 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 info.timerState == Activity.TIMER_STATE_PAUSED or
                 info.timerState == Activity.TIMER_STATE_OFF;
 
-            mActivityStarted = info.timerState != Activity.TIMER_STATE_OFF;
+            if (!mActivityStarted) {
+                mActivityStarted = info.timerState != Activity.TIMER_STATE_OFF;
+                if (mActivityStarted) {
+                    System.println("Activity started - resetting trend engine");
+                    mTrendEngine.reset();
+                    mCycloData = new CycloData();
+                }
+            } else if (
+                mActivityStarted and
+                info.timerState == Activity.TIMER_STATE_OFF
+            ) {
+                System.println("Activity stopped");
+                mActivityStarted = false;
+            }
+        }
+        if (!mPaused && (mActivityStarted || mTrendEngine.isDemo())) {
+            processTrendEngine(info);
         }
 
-        if (mActivityStarted || mTrendEngine.isDemo()) {
-            processTrendEngine(info);
-        } else {
-            mTrendEngine.reset();
-            mCycloData = new CycloData();
-        }
+        mAveragePower = $.getActivityValue(info, :averagePower, 0) as Number;
+        mAverageCadence =
+            $.getActivityValue(info, :averageCadence, 0) as Number;
     }
 
     hidden function processTrendEngine(info as Activity.Info) as Void {
@@ -73,7 +95,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
             if (mDemoCounter > mDemoDuration) {
                 mDemoCounter = 0;
                 mTrendEngine.setDemo(false);
-                mTrendEngine.setDefaults();
+                mTrendEngine.setLockWindowSec($.gLockWindowSec);
+                mTrendEngine.reset();
             }
         }
         var data = mTrendEngine.compute(cadence, power, heartRate);
@@ -119,7 +142,154 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return;
         }
 
-        drawTrends(dc);
+        if (
+            mActivityStarted &&
+            mPaused &&
+            mFirstBlockEF > 0 &&
+            mLatestBlockEF > 0
+        ) {
+            // Only show when valid data
+            drawPausedState(dc);
+            return;
+        }
+
+        // 4. Draw Warning Bar (Always present at the very bottom of the screen)
+        drawBottomWarningBar(dc, dc.getWidth(), dc.getHeight());
+
+        // if ($.gCurrentLayout == LAYOUT_ROWS) {
+        if (mEf == EfWide || mEf == EfLarge) {
+            drawTrendsInColumns(dc);
+        } else {
+            drawTrendsInRows(dc);
+        }
+    }
+
+    function drawPausedState(dc as Dc) as Void {
+        var color = getThemeColor(mDarkBackground);
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+
+        var centerX = width / 2;
+        var startY = (height * 0.15).toNumber();
+        var spacing = (height * 0.22).toNumber();
+
+        var textHeader = "RIDE SUMMARY (PAUSED)";
+        var textEF = "DECOUPLING (EF):";
+        var textVI = "PACING (VI):";
+        var textTorque = "AVERAGE TORQUE:";
+        if (mEf == EfSmall) {
+            textHeader = "SUMMARY";
+            textEF = "EF";
+            textVI = "VI";
+            textTorque = "TQ";
+        }
+
+        var textPaused = "PAUSED";
+        // Pause indicator in the center
+        var font = Graphics.FONT_SYSTEM_LARGE;
+        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(
+            dc.getWidth() / 2,
+            dc.getHeight() / 2,
+            font,
+            textPaused,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+
+        // Header
+        dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
+        var fontHeader = Graphics.FONT_SMALL;
+        dc.drawText(
+            centerX,
+            startY,
+            fontHeader,
+            textHeader,
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+
+        // Subtle divider line
+        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(2);
+        dc.drawLine(width * 0.1, startY + 25, width * 0.9, startY + 25);
+
+        var fontText = Graphics.FONT_SMALL;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+
+        // STAT 1: Cardiorespiratory Decoupling
+        var decouplingText = "---";
+        if (mFirstBlockEF > 0 && mLatestBlockEF > 0) {
+            // Formula: ((Latest - First) / First) * 100
+            var pctDrop =
+                ((mLatestBlockEF - mFirstBlockEF) / mFirstBlockEF) * 100.0;
+
+            // Set color based on how severe the decoupling is
+            if (pctDrop < -10.0) {
+                dc.setColor(color[:warning], Graphics.COLOR_TRANSPARENT);
+            } else {
+                dc.setColor(color[:good], Graphics.COLOR_TRANSPARENT);
+            }
+
+            decouplingText = pctDrop.format("%.1f") + "%";
+        }
+        dc.drawText(
+            width * 0.15,
+            startY + spacing,
+            fontText,
+            textEF, // Cardio decoupling
+            Graphics.TEXT_JUSTIFY_LEFT
+        );
+        dc.drawText(
+            width * 0.85,
+            startY + spacing,
+            fontText,
+            decouplingText,
+            Graphics.TEXT_JUSTIFY_RIGHT
+        );
+
+        // STAT 2: Global Session VI (Pacing)
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        var globalVI = 1.0;
+        if (mAveragePower > 0) {
+            var globalNP = mTrendEngine.getNormalizedPower();
+            globalVI = globalNP / mAveragePower;
+        }
+        dc.drawText(
+            width * 0.15,
+            startY + spacing * 2,
+            fontText,
+            textVI, // Global pacing
+            Graphics.TEXT_JUSTIFY_LEFT
+        );
+        dc.drawText(
+            width * 0.85,
+            startY + spacing * 2,
+            fontText,
+            globalVI.format("%.2f"),
+            Graphics.TEXT_JUSTIFY_RIGHT
+        ); // Example or computed value
+        // TODO explain value and color code based on thresholds (e.g., >1.05 is bad pacing, <1.02 is good pacing)
+
+        // STAT 3: Average Torque
+        var avgTorqueText = "---";
+        if (mAverageCadence > 0) {
+            var sessionAvgTorque = mAveragePower / (mAverageCadence * 0.10472);
+            avgTorqueText = sessionAvgTorque.format("%.1f") + " Nm";
+        }
+        dc.drawText(
+            width * 0.15,
+            startY + spacing * 3,
+            fontText,
+            textTorque,
+            Graphics.TEXT_JUSTIFY_LEFT
+        );
+        dc.drawText(
+            width * 0.85,
+            startY + spacing * 3,
+            fontText,
+            avgTorqueText,
+            Graphics.TEXT_JUSTIFY_RIGHT
+        );
     }
 
     function getBackgroundColorOrWarningColor() as ColorType {
@@ -132,7 +302,62 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return darkMode ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
         }
     }
-    function drawTrends(dc as Dc) as Void {
+    function drawBottomWarningBar(
+        dc as Dc,
+        width as Number,
+        height as Number
+    ) as Void {
+        var color = getThemeColor(mDarkBackground);
+
+        var trendEF = mCycloData.TrendEF;
+        var trendVI = mCycloData.TrendVI;
+        var trendTorque = mCycloData.TrendTorque;
+        var locked = mCycloData.Locked;
+
+        // 0. DRAW THE BOTTOM WARNING/PROGRESS BAR - so its in the background.
+        updateWarningMessage(trendEF, trendVI, trendTorque);
+
+        var hasWarning = mWarningMessage.length() > 0;
+        var infoMessage;
+        var barHeight = (height * 0.16).toNumber();
+        if (mEf == EfSmall) {
+            // 2 lines on small field
+            barHeight = barHeight * 2;
+        }
+        var barY = height - barHeight;
+        if (hasWarning) {
+            infoMessage = mWarningMessage;
+
+            // Draw the background bounding block for the alert
+            dc.setColor(mWarningColor, mWarningColor);
+            dc.fillRectangle(0, barY, width, barHeight);
+
+            // Use dark text on light alerts (Yellow) and white text on Red alerts
+            if (mWarningColor == Graphics.COLOR_YELLOW) {
+                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+            } else {
+                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            }
+        } else {
+            dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
+            // Get progress until next block as a time
+            infoMessage =
+                (locked ? "NEXT" : "FIRST") + " LOCK IN: " +
+                $.secondsToHourMinutesSeconds(
+                    mTrendEngine.getSecondsToNextLock()
+                );
+        }
+        
+        var fontInfoMessage = Graphics.FONT_XTINY;
+        dc.drawText(
+            width / 2,
+            barY + barHeight / 2, // / 4,
+            fontInfoMessage,
+            infoMessage,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+        );
+    }
+    function drawTrendsInRows(dc as Dc) as Void {
         var color = getThemeColor(mDarkBackground);
 
         var width = dc.getWidth();
@@ -184,38 +409,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;
         var trendTorque = mCycloData.TrendTorque;
-
-        // 0. DRAW THE BOTTOM WARNING BAR - so its in the background.
-        updateWarningMessage(trendEF, trendVI, trendTorque);
-        if (mWarningMessage.length() > 0) {
-            var barHeight = (height * 0.16).toNumber();
-            if (mEf == EfSmall) {
-                // 2 lines on small field
-                barHeight = barHeight * 2;
-            }
-            var barY = height - barHeight;
-
-            // Draw the background bounding block for the alert
-            dc.setColor(mWarningColor, mWarningColor);
-            dc.fillRectangle(0, barY, width, barHeight);
-
-            // Use dark text on light alerts (Yellow) and white text on Red alerts
-            if (mWarningColor == Graphics.COLOR_YELLOW) {
-                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-            } else {
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            }
-
-            var fontWarning = Graphics.FONT_XTINY;
-            dc.drawText(
-                width / 2,
-                barY + barHeight / 2, // / 4,
-                fontWarning,
-                mWarningMessage,
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
-            );
-        }
-        // ---
 
         // --- ROW 1: EF ---
         var yEF = startY + rowHeight;
@@ -354,10 +547,189 @@ class WattsAndBeatsView extends WatchUi.DataField {
             drawUpTriangleForBad
         );
     }
+    function drawTrendsInColumns(dc as Dc) as Void {
+        var color = getThemeColor(mDarkBackground);
+
+        var width = dc.getWidth();
+        var height = dc.getHeight();
+
+        // Define our X positions for the 3 columns
+        var col1X = (width * 0.18).toNumber();
+        var col2X = (width * 0.5).toNumber();
+        var col3X = (width * 0.82).toNumber();
+
+        // Define our standard Y baselines for perfect horizontal alignment
+        var headerY = (height * 0.12).toNumber();
+        var actualsY = (height * 0.38).toNumber();
+        var baselinesY = (height * 0.7).toNumber();
+
+        // --- STEP 1: DRAW HEADERS (Labels + Unicode Symbols) ---
+        var headerFont = Graphics.FONT_SMALL;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+
+        dc.drawText(
+            col1X,
+            headerY,
+            headerFont,
+            "EF",
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+        dc.drawText(
+            col2X,
+            headerY,
+            headerFont,
+            "VI",
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+        dc.drawText(
+            col3X,
+            headerY,
+            headerFont,
+            "TQ",
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+
+        // --- STEP 2: DRAW DOCK DIVIDER LINES ---
+        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(1);
+        // Horizontal rule under headers
+        dc.drawLine(width * 0.05, actualsY - 5, width * 0.95, actualsY - 5);
+        // Vertical column separation grids
+        dc.drawLine(
+            (width * 0.34).toNumber(),
+            headerY,
+            (width * 0.34).toNumber(),
+            height * 0.85
+        );
+        dc.drawLine(
+            (width * 0.66).toNumber(),
+            headerY,
+            (width * 0.66).toNumber(),
+            height * 0.85
+        );
+
+        // --- STEP 3: DRAW LIVE MOVING ACTUALS (Large, crisp text) ---
+        var fontActuals = Graphics.FONT_LARGE;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+
+        var actualEF = mCycloData.ActualEF;
+        var actualVI = mCycloData.ActualVI;
+        var actualTorque = mCycloData.ActualTorque;
+        var trendEF = mCycloData.TrendEF;
+        var trendVI = mCycloData.TrendVI;
+        var trendTorque = mCycloData.TrendTorque;
+        var lockedEF = mCycloData.LockedEF;
+        var lockedVI = mCycloData.LockedVI;
+        var lockedTorque = mCycloData.LockedTorque;
+
+        // Use your decimal-aligned formatting strategy here
+        dc.drawText(
+            col1X,
+            actualsY,
+            fontActuals,
+            actualEF.format("%.2f"),
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+        dc.drawText(
+            col2X,
+            actualsY,
+            fontActuals,
+            actualVI.format("%.2f"),
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+        dc.drawText(
+            col3X,
+            actualsY,
+            fontActuals,
+            actualTorque.format("%.1f"),
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+
+        // --- STEP 4: DRAW LOCKED BASELINES & TREND ALERTS ---
+        var lockedFont = Graphics.FONT_TINY;
+
+        // Column 1: EF Baseline + Trend Arrow
+        setTrendDisplayColor(
+            dc,
+            trendEF,
+            color[:good],
+            color[:bad],
+            color[:neutral]
+        );
+        var drawUpTriangleForBad = false; // EF dropping is bad, so trend arrow points down for bad trend
+        dc.drawText(
+            col1X,
+            baselinesY,
+            lockedFont,
+            lockedEF.format("%.2f") +
+                " " +
+                getTrendArrow(trendEF, drawUpTriangleForBad),
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+
+        // Column 2: VI Baseline + Trend Arrow
+        setTrendDisplayColor(
+            dc,
+            trendVI,
+            color[:good],
+            color[:warning],
+            color[:neutral]
+        );
+        drawUpTriangleForBad = true;
+        dc.drawText(
+            col2X,
+            baselinesY,
+            lockedFont,
+            lockedVI.format("%.2f") +
+                " " +
+                getTrendArrow(trendVI, drawUpTriangleForBad),
+            Graphics.TEXT_JUSTIFY_CENTER 
+        );
+
+        // Column 3: Torque Baseline + Trend Arrow
+        setTrendDisplayColor(
+            dc,
+            trendTorque,
+            color[:good],
+            color[:bad],
+            color[:neutral]
+        );
+        drawUpTriangleForBad = false; // Torque dropping is bad, so trend arrow points down for bad trend
+        dc.drawText(
+            col3X,
+            baselinesY,
+            lockedFont,
+            lockedTorque.format("%.1f") +
+                " " +
+                getTrendArrow(trendTorque, drawUpTriangleForBad),
+            Graphics.TEXT_JUSTIFY_CENTER 
+        );
+    }
+
+    function getTrendArrow(
+        trend as Number,
+        drawUpTriangleForBad as Boolean
+    ) as String {
+        // trend -1 is bad, +1 is good, 0 is neutral.
+        if (drawUpTriangleForBad and trend < 0) {
+            // Invert the trend for display purposes if up triangle indicates bad trend
+            trend = -1 * trend;
+        }
+
+        if (trend == 1) {
+            return "▲";
+        } // Improving or rising
+        if (trend == -1) {
+            return "▼";
+        } // Degraging or dropping
+        return "•"; // Stable baseline
+    }
 
     function drawDebugInfo(dc as Dc) as Void {
         var color = getThemeColor(mDarkBackground);
         dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+
+        var globalNP = mTrendEngine.getNormalizedPower();
 
         var blockCompletedString = "No";
         if (mCycloData.BlockCompleted > 0) {
@@ -396,10 +768,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             "Elapsed: " +
             $.secondsToHourMinutesSeconds(mCycloData.Elapsed) +
             "\n";
-        text +=
-            "Buffer Size: " +
-            $.secondsToHourMinutesSeconds(mCycloData.BufferSize) +
-            "\n";
+        text += "Global NP: " + globalNP.format("%.2f") + "\n";
 
         dc.drawText(
             dc.getWidth() / 2,
@@ -416,6 +785,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 : Graphics.COLOR_BLACK,
             :header => darkBackground
                 ? Graphics.COLOR_LT_GRAY
+                : Graphics.COLOR_LT_GRAY,
+            :faded => darkBackground
+                ? Graphics.COLOR_DK_GRAY
                 : Graphics.COLOR_LT_GRAY,
             :strong => darkBackground
                 ? Graphics.COLOR_WHITE

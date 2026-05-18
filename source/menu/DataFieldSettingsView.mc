@@ -47,8 +47,11 @@ class DataFieldSettingsDelegate extends WatchUi.BehaviorDelegate {
   //! @return true if handled, false otherwise
   function onMenu() as Boolean {
     var menu = new $.DataFieldSettingsMenu();
-    // var mi;
+    var mi;
     
+    mi = new WatchUi.MenuItem("Advanced", null, "advanced", null);
+    menu.addItem(mi);
+
     // mi = new WatchUi.MenuItem("Large field", null, "large_field", null);
     // menu.addItem(mi);
     // mi = new WatchUi.MenuItem("Wide field", null, "wide_field", null);
@@ -58,11 +61,14 @@ class DataFieldSettingsDelegate extends WatchUi.BehaviorDelegate {
     
     var boolean = false;
 
-    boolean = Storage.getValue("demoMode") ? true : false;
+    boolean = Storage.getValue("demoMode") ? false : false;
     menu.addItem(new WatchUi.ToggleMenuItem("Demo", null, "demoMode", boolean, null));
 
-    boolean = Storage.getValue("debugMode") ? true : false;
+    boolean = Storage.getValue("debugMode") ? false : false;
     menu.addItem(new WatchUi.ToggleMenuItem("Debug", null, "debugMode", boolean, null));
+
+    boolean = Storage.getValue("resetDefaults") ? false : false;
+    menu.addItem(new WatchUi.ToggleMenuItem("Reset", null, "resetDefaults", boolean, null));
 
     var view = new $.DataFieldSettingsView();
     WatchUi.pushView(menu, new $.DataFieldSettingsMenuDelegate(view), WatchUi.SLIDE_IMMEDIATE);

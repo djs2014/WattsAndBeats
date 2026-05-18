@@ -1,24 +1,59 @@
 readme
 
-if ok -> hide gray bar
-demo mode -> circle background transparant.
-beep on warning?
+beep or toast on warning
+get nice png files for ef,vi,tq
+demo -> calc average power / average cadence
+-> sep class for global data or in trendengine?
 
-# ConnectIQ Datafield displaying Cardio Efficiency, Pacing Smoothness and Torque.
+set lockwindow
+set different block window 10 - 60 minutes
 
-Calc current EF, VI, Torque
-With Fixed 30-Minute Blocks
-Settings menu
-    - show text
-    - show graph (bars / avg per 30 min (x))
-    - targets
-    - rolling buffer 180 sec
-    - history buffer 30 / 60 / 90 minutes
+x reset to defaults 30
 
-callback on block complete
+layout: EF trend  actual value
+EF  Metabolic economy, fuel efficiency, heart-to-watt connection. $\heartsuit \rightarrow \lightning$
+VI Smoothness, pacing discipline, tracking surges vs. steady riding. ~ line or target/bullseye
+TQ Rotational force, muscle grinding, pure crank pressure. paired with a Circular Vector Arrow ($\circlearrowright$) or a Wrench/Gear.
+    arc 
 
-version with graphics / table
+-- layout 2
 
+[ 📈 EF ]      [ 🎯 VI ]      [ ↻ TQ ]   <-- Clean Icons + Labels in Header
+  ----------------------------------------
+     1.48           1.02           18.5     <-- Moving Actuals
+     1.55 •         1.01 •         16.2 •   <-- Baselines + Trend Dots
+
+
+
+Stats:
+1. What Stats Matter Most When Paused?When a cyclist pulls over for a break or a traffic light, they don't want to look at a 3-minute rolling average. They want to check their overall macro trends for the entire ride so far:Aerobic Decoupling ($EF\text{ Drop}$): The ultimate endurance metric. Compare their very first 30-minute baseline block to their most recent completed 30-minute block. If it has dropped by $12\%$, their cardio system is heavily fatiguing.Global VI: Their pacing score for the whole ride.Average Torque: The total muscular work done per pedal stroke across the ride.
+
+Tracking the First and Last Blocks in Code
+
+To calculate the overall $EF$ drop, your compute logic needs to remember the very first baseline established at minute 3, and constantly update a variable with the most recent baseline.Add these tracking variables at the class level:
+
+var firstBlockEF = 0.0;
+var latestBlockEF = 0.0;
+if (totalActiveSeconds == 180) {
+    firstBlockEF = actualEF; // Lock in the "fresh" baseline forever
+    latestBlockEF = actualEF;
+} else if (totalActiveSeconds > 180 && totalActiveSeconds % 1800 == 0) {
+    latestBlockEF = actualEF; // Update with the most recent block baseline
+}
+
+
++-------------------------------------+
+|            RIDE PAUSED              |
+| ----------------------------------- |
+| CARDIO DECOUPLING:    -7.4%         |
+| GLOBAL PACING (VI):    1.04         |
+| SESSION AVG TORQUE:   28.2 Nm       |
++-------------------------------------+
+
+Color Psychology: Rendering a massive Red "-14.2%" Decoupling text at a rest stop tells the rider immediately that they are under-fueling or heavily fatigued, prompting them to eat a gel or take a longer break before spinning back up.
+
+
+--------------
 Arrows or Color Codes
 
 EF Indicator: If trendEF == -1, draw a Red Down Arrow $\downarrow$ next to the EF value. This warns the rider they are "aerobically decoupling" (heart rate is skyrocketing relative to power output). They need to drink water or back off the pace.
@@ -70,18 +105,27 @@ trendVI = 0
 trendVI = -1 draw a Yellow Warning Mark or make the background yellow. This indicates they are surging too hard on hills compared to their first 30 minutes.
 
 
-// Setting EF Display Color
-switch (trendEF) {
-    case 1:
-        dc.setColor(Graphics.COLOR_GREEN, Graphics.COLOR_TRANSPARENT);
-        efArrow = "↑";
-        break;
-    case -1:
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-        efArrow = "↓";
-        break;
-    default:
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        efArrow = "─";
-        break;
-}
+good values ..
+
+1. What is a "Good" Efficiency Factor (EF)?EF is a direct window into your aerobic fitness ($EF = \text{Normalized Power} \div \text{Heart Rate}$). It represents how many watts you produce per single heartbeat.Because raw power scales heavily with size, a 90 kg elite rider will have a much higher absolute EF number than a 50 kg elite rider, even if their fitness is identical. Here is what typical EF numbers look like during a steady Zone 2 (Endurance) ride:Below 1.20: Typical for absolute beginners, unconditioned riders, or someone suffering from extreme systemic fatigue. The heart is beating very fast to produce minimal wattage.1.30 – 1.50: A solid, healthy baseline for recreational club riders and amateur racers during standard endurance base training.1.50 – 1.80: Excellent aerobic fitness. This range is common for highly trained master's athletes and amateur racers with years of consistent endurance base-building.2.00 to 3.00+: Elite/Professional endurance engine. These riders can spin at 280W while keeping their heart rate at a relaxed 130 bpm.💡 The Rule of Thumb for your App:For EF, the absolute number doesn't matter as much as the trend. If a rider's personal baseline is $1.40$, a "good" ride is one where their actual EF stays above $1.33$ (less than a 5% drop, meaning zero aerobic decoupling).
+
+2. What is a "Good" Torque Value (TQ)?Torque measures the actual physical twisting force applied to the pedals ($Nm$). Unlike power, which is force multiplied by speed, torque strictly tells you how hard your leg muscles are crushing the pedals.During standard, flat riding at a smooth, standard cadence (85–95 RPM), torque naturally sits in a modest "comfort zone":12 – 22 Nm: Standard, safe cruising torque. Your legs are relying on the cardiorespiratory system and momentum, saving your muscle fibers from tearing or accumulating heavy acid.25 – 35 Nm: Pushing hard. This occurs when riding into a headwind, climbing a mild false-flat, or pulling a heavy turn at the front of a group.When Torque Gets High (The "Danger Zone")When a rider hits a steep hill or drops their cadence down to a heavy gear grind (40–60 RPM):Torque will instantly skyrocket to 40 – 60+ Nm.For targeted "Big Gear/Torque Intervals," elite male athletes aim for roughly 1.5 Nm per kilogram of body weight (about 110 Nm for a 75 kg rider) for short 4-minute bursts.💡 The Rule of Thumb for your App:For standard endurance riding, lower torque at the same power is better because it protects the muscles from fatigue.If your app displays an actual torque value that is 10% higher than the locked 30-minute baseline, it warns the rider to change gears. It means they have dropped their cadence and are creating a "grinding" scenario that will prematurely burn out their legs.
+
+
+
+
+When Torque Gets High (The "Danger Zone")
+
+When a rider hits a steep hill or drops their cadence down to a heavy gear grind (40–60 RPM):
+
+    Torque will instantly skyrocket to 40 – 60+ Nm.
+
+    For targeted "Big Gear/Torque Intervals," elite male athletes aim for roughly 1.5 Nm per kilogram of body weight (about 110 Nm for a 75 kg rider) for short 4-minute bursts.
+
+
+The Rule of Thumb for your App:
+
+For standard endurance riding, lower torque at the same power is better because it protects the muscles from fatigue.
+
+If your app displays an actual torque value that is 10% higher than the locked 30-minute baseline, it warns the rider to change gears. It means they have dropped their cadence and are creating a "grinding" scenario that will prematurely burn out their legs.
+

@@ -28,6 +28,37 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       $.StorageSetValue(id as String, item.isEnabled());
       return;
     }
+
+    if (id instanceof String && id.equals("advanced")) {
+      var advMenu = new WatchUi.Menu2({ :title => "Advanced" });
+
+      var mi = new WatchUi.MenuItem(
+        "Lock window sec|180-",
+        null,
+        "lock_window_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      advMenu.addItem(mi);
+
+      // var boolean = Storage.getValue("layout_rows") ? false : false;
+      // advMenu.addItem(
+      //   new WatchUi.ToggleMenuItem(
+      //     "Layout rows",
+      //     null,
+      //     "layout_rows",
+      //     boolean,
+      //     null
+      //   )
+      // );
+
+      WatchUi.pushView(
+        advMenu,
+        new $.GeneralMenuDelegate(self, advMenu),
+        WatchUi.SLIDE_UP
+      );
+      return;
+    }
   }
 
   function onSelectedSelection(
@@ -60,7 +91,6 @@ class GeneralMenuDelegate extends WatchUi.Menu2InputDelegate {
       // item.setSubLabel($.subMenuToggleMenuItem(id as String));
       return;
     }
-
 
     // Numeric input
     var prompt = item.getLabel();

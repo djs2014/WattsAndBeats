@@ -1,5 +1,7 @@
 # Watts and beats
 
+A ConnectIQ Datafield displaying Cardio Efficiency, Pacing Smoothness and Torque.
+
 Watts and beats turns raw power and heart rate data into actionable technique adjustments while you ride.
 
 Rather than relying on post-ride software to see where your performance dropped, CycloMetrics establishes a baseline every 30 minutes and tracks your real-time trends against it.
