@@ -28,6 +28,11 @@ class TrendEngine {
     var trendVI as Number = 0;
     var trendTorque as Number = 0;
 
+    // Peak and Max tracking variables
+    var maxInstantTorque = 0.0;
+    var peakRollingEF = 0.0;
+    var maxRollingVI = 0.0; // Captures their most chaotic 3-minute surging window
+
     var useDemoData as Boolean = false;
 
     // TODO
@@ -62,7 +67,7 @@ class TrendEngine {
     function setLockWindowSec(lockWindowSec as Number) as Void {
         lockStep1800 = lockWindowSec;
     }
-  
+
     function getNormalizedPower() as Number {
         return globalNP;
     }
@@ -164,6 +169,21 @@ class TrendEngine {
             actualEF = previousEF;
         }
 
+        // 1. Capture the absolute max torque smash of the ride
+        if (currentTorque > maxInstantTorque) {
+            maxInstantTorque = currentTorque;
+        }
+
+        // 2. Capture the best sustained 3-minute aerobic efficiency block
+        if (actualEF > peakRollingEF) {
+            peakRollingEF = actualEF;
+        }
+
+        // 3. Capture their most erratic pacing window (highest rolling VI)
+        if (actualVI > maxRollingVI) {
+            maxRollingVI = actualVI;
+        }
+
         // Approximate rolling VI over the 3-minute window
 
         // 4. THE 3-MINUTE (buffer full) AND 30-MINUTE LOCK TRIGGER
@@ -175,8 +195,7 @@ class TrendEngine {
             if (methodBlockCompleted != null) {
                 methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
             }
-        }
-        else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
+        } else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
             System.println("LOCKING TREND SNAPSHOT");
             lockedEF = actualEF;
             lockedVI = actualVI;
@@ -335,7 +354,9 @@ class TrendEngine {
     function getTrends() as Array<Number> {
         return [trendEF, trendVI, trendTorque];
     }
-
+    function getMaxValues() as Array<Float> {
+        return [peakRollingEF, maxRollingVI, maxInstantTorque];
+    }
     function getElapsedSeconds() as Number {
         return elapsedSeconds;
     }

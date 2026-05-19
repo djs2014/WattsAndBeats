@@ -1,19 +1,188 @@
 readme
 
 beep or toast on warning
-get nice png files for ef,vi,tq
+debug only on big screen show all data!
+get nice png files for ef,vi,tq logos
+option to show max values when paused 
+
+option: settings
+Enabling manual baseline resets via onTimerLap() elevates your app into an elite pacing tool.
+
+If a rider cruises through a 20-minute valley flat and then suddenly hits the base of a massive alpine climb, they can press the Lap Key.
+
+Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
+
+EF  Metabolic economy, fuel efficiency, heart-to-watt connection. $\heartsuit \rightarrow \lightning$
+VI Smoothness, pacing discipline, tracking surges vs. steady riding. ~ line or target/bullseye
+TQ Rotational force, muscle grinding, pure crank pressure. paired with a Circular Vector Arrow ($\circlearrowright$) or a Wrench/Gear.
+
+
 demo -> calc average power / average cadence
 -> sep class for global data or in trendengine?
+pause -> is avg cadence / power zero?
 
-set lockwindow
+
+MAX values
+
+TQ
+Max Torque ($TQ_{max}$) — EssentialWhy it's great: This is the ultimate bragging-rights metric for a cyclist. It represents the absolute maximum raw muscular force they smashed into the pedals (e.g., during a massive sprint or a steep out-of-the-saddle kick).How to track it: Simply update a global variable whenever the instantaneous torque exceeding the current max.
+
+
+EF
+Max Efficiency Factor ($EF_{max}$) — Skip It (Use a Peak Buffer)
+Do: Track the Peak 3-Minute Rolling EF. This represents the best, most sustained aerobic block of the entire ride.
+
+VI:
+Track Global Session VI (to show overall pacing discipline) and highlight Max Power instead.
+
+
+===================================
+     RIDE PAUSED - SUMMARY
+===================================
+ [ METRIC ]    [ AVG ]     [ PEAK ]
+-----------------------------------
+    EF          1.45        1.72  <-- Peak 3-Min Block
+    VI          1.04        1.24  <-- Max 3-Min Rolling Surge
+    TQ          18.2 Nm     84.5  <-- Absolute Max Smash
+===================================
+
+
+---
+// 1. Capture the absolute max torque smash of the ride
+if (currentTorque > maxInstantTorque) {
+    maxInstantTorque = currentTorque;
+}
+
+// 2. Capture the best sustained 3-minute aerobic efficiency block
+if (actualEF > peakRollingEF) {
+    peakRollingEF = actualEF;
+}
+
+// 3. Capture their most erratic pacing window (highest rolling VI)
+if (actualVI > maxRollingVI) {
+    maxRollingVI = actualVI;
+}
+---
+
+function drawColumnLayout(dc, width, height) {
+    // Define our X positions for the 3 columns
+    var col1X = (width * 0.18).toNumber();
+    var col2X = (width * 0.50).toNumber();
+    var col3X = (width * 0.82).toNumber();
+
+    // Define our standard Y baselines for perfect horizontal alignment
+    var headerY    = (height * 0.12).toNumber();
+    var actualsY   = (height * 0.38).toNumber();
+    var baselinesY = (height * 0.70).toNumber();
+
+    // Cache fonts to keep the draw text lines cleaner
+    var fTiny   = Graphics.FONT_TINY;
+    var fSmall  = Graphics.FONT_SMALL;
+    var fLarge  = Graphics.FONT_LARGE;
+    var jCenter = Graphics.TEXT_JUSTIFY_CENTER;
+
+    // --- STEP 1: DRAW HEADERS (Labels) ---
+    dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(col1X, headerY, fSmall, "EF", jCenter);
+    dc.drawText(col2X, headerY, fSmall, "VI", jCenter);
+    dc.drawText(col3X, headerY, fSmall, "TQ", jCenter);
+
+    // --- STEP 2: DRAW DOCK DIVIDER LINES ---
+    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+    dc.setPenWidth(1);
+    // Horizontal rule under headers
+    dc.drawLine(width * 0.05, actualsY - 5, width * 0.95, actualsY - 5);
+    // Vertical column separation grids
+    dc.drawLine((width * 0.34).toNumber(), headerY, (width * 0.34).toNumber(), height * 0.85);
+    dc.drawLine((width * 0.66).toNumber(), headerY, (width * 0.66).toNumber(), height * 0.85);
+
+    // --- STEP 3: DRAW LIVE MOVING ACTUALS ---
+    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(col1X, actualsY, fLarge, actualEF.format("%.2f"), jCenter);
+    dc.drawText(col2X, actualsY, fLarge, actualVI.format("%.2f"), jCenter);
+    dc.drawText(col3X, actualsY, fLarge, actualTorque.format("%.1f"), jCenter);
+
+    // --- STEP 4: DRAW LOCKED BASELINES & TREND ALERTS ---
+    
+    // Column 1: EF Baseline + Trend Arrow
+    setTrendColor(dc, trendEF); 
+    dc.drawText(col1X, baselinesY, fTiny, lockedEF.format("%.2f") + " " + getTrendArrow(trendEF), jCenter);
+
+    // Column 2: VI Baseline + Trend Arrow
+    setTrendColor(dc, trendVI);
+    dc.drawText(col2X, baselinesY, fTiny, lockedVI.format("%.2f") + " " + getTrendArrow(trendVI), jCenter);
+
+    // Column 3: Torque Baseline + Trend Arrow
+    setTrendColor(dc, trendTorque);
+    dc.drawText(col3X, baselinesY, fTiny, lockedTorque.format("%.1f") + " " + getTrendArrow(trendTorque), jCenter);
+}
+
+function drawPauseLayout(dc, width, height) {
+    dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+    dc.clear();
+
+    var colLabel   = (width * 0.12).toNumber();
+    var colAvg     = (width * 0.50).toNumber();
+    var colPeak    = (width * 0.88).toNumber();
+    
+    var titleY     = (height * 0.10).toNumber();
+    var startY     = (height * 0.35).toNumber();
+    var rowSpacing = (height * 0.20).toNumber();
+
+    var fXTiny  = Graphics.FONT_XTINY;
+    var fSmall  = Graphics.FONT_SMALL;
+    var jLeft   = Graphics.TEXT_JUSTIFY_LEFT;
+    var jRight  = Graphics.TEXT_JUSTIFY_RIGHT;
+    var jCenter = Graphics.TEXT_JUSTIFY_CENTER;
+
+    // Title Banner
+    dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(width / 2, titleY, fSmall, "RIDE SUMMARY (PAUSED)", jCenter);
+
+    // Sub-headers
+    dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(colAvg, startY - 20, fXTiny, "AVG", jRight);
+    dc.drawText(colPeak, startY - 20, fXTiny, "MAX/PK", jRight);
+
+    // Divider
+    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+    dc.drawLine(width * 0.05, startY - 5, width * 0.95, startY - 5);
+
+    // ROW 1: EF
+    var y = startY;
+    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(colLabel, y, fSmall, "EF", jLeft);
+    dc.drawText(colAvg, y, fSmall, actualEF.format("%.2f"), jRight); 
+    dc.drawText(colPeak, y, fSmall, peakRollingEF.format("%.2f"), jRight);
+
+    // ROW 2: VI
+    y += rowSpacing;
+    var sessionVI = "1.00";
+    var activityInfo = Activity.getActivityInfo();
+    if (activityInfo != null && activityInfo.averagePower != null && activityInfo.averagePower > 0) {
+        sessionVI = (globalNP / activityInfo.averagePower).format("%.2f");
+    }
+    dc.drawText(colLabel, y, fSmall, "VI", jLeft);
+    dc.drawText(colAvg, y, fSmall, sessionVI, jRight);
+    dc.drawText(colPeak, y, fSmall, maxRollingVI.format("%.2f"), jRight);
+
+    // ROW 3: Torque
+    y += rowSpacing;
+    dc.drawText(colLabel, y, fSmall, "TQ", jLeft);
+    dc.drawText(colAvg, y, fSmall, actualTorque.format("%.1f") + " Nm", jRight);
+    dc.drawText(colPeak, y, fSmall, maxInstantTorque.format("%.1f"), jRight);
+}
+---
+
+
+show progress bar tiny option on next lock
+set lockwindow - set initial value 1800
+
 set different block window 10 - 60 minutes
 
 x reset to defaults 30
 
 layout: EF trend  actual value
-EF  Metabolic economy, fuel efficiency, heart-to-watt connection. $\heartsuit \rightarrow \lightning$
-VI Smoothness, pacing discipline, tracking surges vs. steady riding. ~ line or target/bullseye
-TQ Rotational force, muscle grinding, pure crank pressure. paired with a Circular Vector Arrow ($\circlearrowright$) or a Wrench/Gear.
     arc 
 
 -- layout 2

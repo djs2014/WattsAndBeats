@@ -8,11 +8,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mDemoCounter as Number = 0;
     hidden var mDemoDuration as Number = 360; // 6 minutes of demo data
     hidden var mPaused as Boolean = true;
+    hidden var mDemoPaused as Boolean = false;
 
     hidden var mEf as EdgeField;
     hidden var mDarkBackground as Boolean = false;
 
     hidden var mTrendEngine as TrendEngine = new TrendEngine();
+    hidden var mTestGenerator as TrendEngineGenerator = new TrendEngineGenerator();
+
     hidden var mCycloData as CycloData = new CycloData();
     hidden var mActivityStarted as Boolean = false;
     hidden var mBlockCompletedCounter as Number = 0;
@@ -71,13 +74,56 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mActivityStarted = false;
             }
         }
-        if (!mPaused && (mActivityStarted || mTrendEngine.isDemo())) {
-            processTrendEngine(info);
-        }
-
+        
         mAveragePower = $.getActivityValue(info, :averagePower, 0) as Number;
         mAverageCadence =
             $.getActivityValue(info, :averageCadence, 0) as Number;
+
+        if (mTrendEngine.isDemo()) {
+            
+            // if (mDemoCounter <= 0) {
+            //     // Reset the demo state when starting a new demo
+            //     // TODO -> demo logic in generator class
+            //     mDemoPaused = false;
+            // }
+            // Always start demo, when press activity started then paused to show the paused screen with data, 
+            // TODO 
+            // when press lap key // TODO add separate button for starting demo instead of overloading lap key
+            // TODO and display LAP==PAUSE screen with the data from the demo, then on next press of lap key, start the demo with the fake data and trends,
+            // then unpause to resume the demo and show the trends and warning messages
+
+
+            //if (!mPaused) {
+                processTrendEngine(info);
+            //}
+            // Override the averages with the generated demo data averages to show realistic values during the demo
+            var averages = mTestGenerator.getAverages(mDemoCounter-1);
+            mAverageCadence = averages[0].toNumber();
+            mAveragePower = averages[1].toNumber();
+        }
+        else if (!mPaused  ) {
+            processTrendEngine(info);
+        }
+        
+    }
+
+    // This event fires instantly when a lap is recorded, only when activity is started.
+    function onTimerLap() {        
+        System.println("Lap button pressed - toggling demo paused state");
+        mDemoPaused = !mDemoPaused;
+        // // 1. Play a subtle system alert tone so the rider knows the app registered the lap
+        // if (Attention has :playTone) {
+        //     Attention.playTone(Attention.TONE_LAP);
+        // }
+
+        // 2. FORCIBLY RE-LOCK YOUR BASELINES IMMEDIATELY
+        // This lets the rider manually reset their target averages for a new interval/hill climb!
+        // lockedEF = actualEF;
+        // lockedVI = actualVI;
+        // lockedTorque = actualTorque;
+
+        // Reset your localized active second timer if you want lap-specific intervals
+        // totalActiveSeconds = 0; 
     }
 
     hidden function processTrendEngine(info as Activity.Info) as Void {
@@ -87,13 +133,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
             $.getActivityValue(info, :currentHeartRate, 0) as Number;
 
         if (mTrendEngine.isDemo()) {
-            var fakeData = $.generateFakeData(mDemoCounter);
+            var fakeData = mTestGenerator.getFakeData(mDemoCounter);
             cadence = fakeData[0];
             power = fakeData[1];
             heartRate = fakeData[2];
             mDemoCounter = mDemoCounter + 1;
             if (mDemoCounter > mDemoDuration) {
                 mDemoCounter = 0;
+                mDemoPaused = false;
                 mTrendEngine.setDemo(false);
                 mTrendEngine.setLockWindowSec($.gLockWindowSec);
                 mTrendEngine.reset();
@@ -177,13 +224,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var textHeader = "RIDE SUMMARY (PAUSED)";
         var textEF = "DECOUPLING (EF):";
         var textVI = "PACING (VI):";
-        var textTorque = "AVERAGE TORQUE:";
+        var textTorque = "AVG TORQUE:";
         if (mEf == EfSmall) {
             textHeader = "SUMMARY";
             textEF = "EF";
             textVI = "VI";
             textTorque = "TQ";
         }
+
 
         var textPaused = "PAUSED";
         // Pause indicator in the center
@@ -253,6 +301,11 @@ class WattsAndBeatsView extends WatchUi.DataField {
         if (mAveragePower > 0) {
             var globalNP = mTrendEngine.getNormalizedPower();
             globalVI = globalNP / mAveragePower;
+
+        System.println(["Avg cadence:", mAverageCadence,
+         "Avg power:", mAveragePower, "Global NP:", globalNP
+        ]);
+
         }
         dc.drawText(
             width * 0.15,
@@ -901,6 +954,10 @@ class CycloData {
 
     public var Elapsed as Number = 0;
     public var BufferSize as Number = 0;
+
+    // public var AveragePower as Number = 0;
+    // public var AverageCadence as Number = 0;
+
     function initialize() {}
 
     public function toString() as String {
