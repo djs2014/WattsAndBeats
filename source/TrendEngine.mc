@@ -22,6 +22,7 @@ class TrendEngine {
     var lockedEF as Float = 0.0f;
     var lockedVI as Float = 0.0f;
     var lockedTorque as Float = 0.0f;
+    var lockNowOnLap as Boolean = false;
 
     // Trend Outputs (-1 = Decoupling/Failing, 0 = Steady, 1 = Improving)
     var trendEF as Number = 0;
@@ -45,6 +46,8 @@ class TrendEngine {
 
     function initialize() {
         AppBase.initialize();
+        // OH. dummy call otherwise removed by the compiler.
+        lockNow();
     }
 
     hidden var methodBlockCompleted as Method?;
@@ -70,6 +73,19 @@ class TrendEngine {
 
     function getNormalizedPower() as Number {
         return globalNP;
+    }
+
+    function lockNow() as Boolean {
+        if (!hasFirstBaseline) {
+            System.println(
+                "Cannot manually lock trend snapshot before first baseline is established"
+            );
+            return false;
+        }
+
+        System.println("Manually locking trend snapshot");
+        lockNowOnLap = true;
+        return true;
     }
 
     // Calculated per second, when activity paused, do not compute!
@@ -184,7 +200,19 @@ class TrendEngine {
             maxRollingVI = actualVI;
         }
 
-        // Approximate rolling VI over the 3-minute window
+        // Check lock now
+        if (lockNowOnLap && hasFirstBaseline) {
+            System.println("Manually locking trend snapshot on lap key press");
+            lockNowOnLap = false; // Reset the flag after locking
+            lockedEF = actualEF;
+            lockedVI = actualVI;
+            lockedTorque = actualTorque;
+            elapsedSeconds = 0; // Reset the block timer to give them a full lock window after manual lock
+
+            if (methodBlockCompleted != null) {
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+            }
+        }
 
         // 4. THE 3-MINUTE (buffer full) AND 30-MINUTE LOCK TRIGGER
         if (!hasFirstBaseline && isBufferFull) {

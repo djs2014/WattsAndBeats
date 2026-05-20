@@ -40,7 +40,9 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.StorageSetValue("debugMode", false);
         }
 
+            // TODO
         $.gDebug = $.getStorageValue("debugMode", false) as Boolean;
+        $.gOnLapKeyLockData = $.getStorageValue("onlapkey_lockdata", false) as Boolean;
 
         var trendEngine = getTrendEngine();
         
@@ -65,7 +67,6 @@ class WattsAndBeatsApp extends Application.AppBase {
     }
 }
 
-var gDebug as Boolean = false;
 
 function getApp() as WattsAndBeatsApp {
     return Application.getApp() as WattsAndBeatsApp;
@@ -77,4 +78,7 @@ function getTrendEngine() as TrendEngine {
     return $.gTrendEngine as TrendEngine;
 }
 var gTrendEngine as TrendEngine?;
+
+var gDebug as Boolean = false;
+var gOnLapKeyLockData as Boolean = false;
 var gLockWindowSec as Number = 1800;

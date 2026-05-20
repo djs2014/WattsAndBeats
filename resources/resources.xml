@@ -1,0 +1,7 @@
+<resources>
+    <fonts>
+        <font id="iconFontSmall" filename="fonts/wattsandbeats_24.fnt" />
+        <font id="iconFontMedium" filename="fonts/wattsandbeats_36.fnt" />
+        <font id="iconFontLarge" filename="fonts/wattsandbeats_48.fnt" />
+    </fonts>
+</resources>

@@ -41,16 +41,16 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
       advMenu.addItem(mi);
 
-      // var boolean = Storage.getValue("layout_rows") ? false : false;
-      // advMenu.addItem(
-      //   new WatchUi.ToggleMenuItem(
-      //     "Layout rows",
-      //     null,
-      //     "layout_rows",
-      //     boolean,
-      //     null
-      //   )
-      // );
+      var boolean = Storage.getValue("onlapkey_lockdata") ? false : false;
+      advMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Lock data on lap key",
+          null,
+          "onlapkey_lockdata",
+          boolean,
+          null
+        )
+      );
 
       WatchUi.pushView(
         advMenu,

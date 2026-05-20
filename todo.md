@@ -1,28 +1,24 @@
-readme
+sync field_utils
 
-beep or toast on warning
-debug only on big screen show all data!
-get nice png files for ef,vi,tq logos
-option to show max values when paused 
+setting: beep or toast on warning (once, reset until clear)
+debug on, show only on big screen extra!
+x get nice icons/png files for ef,vi,tq logos
+setting: on lap key: lock new baseline (after x sec)
+    If a rider cruises through a 20-minute valley flat and then suddenly hits the base of a massive alpine climb, they can press the Lap Key.
 
-option: settings
-Enabling manual baseline resets via onTimerLap() elevates your app into an elite pacing tool.
+    Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
 
-If a rider cruises through a 20-minute valley flat and then suddenly hits the base of a massive alpine climb, they can press the Lap Key.
+show progress bar tiny option on next lock
+set lockwindow - set initial value 1800
 
-Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
 
+update readme
 EF  Metabolic economy, fuel efficiency, heart-to-watt connection. $\heartsuit \rightarrow \lightning$
 VI Smoothness, pacing discipline, tracking surges vs. steady riding. ~ line or target/bullseye
 TQ Rotational force, muscle grinding, pure crank pressure. paired with a Circular Vector Arrow ($\circlearrowright$) or a Wrench/Gear.
 
 
-demo -> calc average power / average cadence
--> sep class for global data or in trendengine?
-pause -> is avg cadence / power zero?
-
-
-MAX values
+-> MAX values on pause screen
 
 TQ
 Max Torque ($TQ_{max}$) — EssentialWhy it's great: This is the ultimate bragging-rights metric for a cyclist. It represents the absolute maximum raw muscular force they smashed into the pedals (e.g., during a massive sprint or a steep out-of-the-saddle kick).How to track it: Simply update a global variable whenever the instantaneous torque exceeding the current max.
@@ -45,7 +41,7 @@ Track Global Session VI (to show overall pacing discipline) and highlight Max Po
     VI          1.04        1.24  <-- Max 3-Min Rolling Surge
     TQ          18.2 Nm     84.5  <-- Absolute Max Smash
 ===================================
-
++ the data in current pause screen
 
 ---
 // 1. Capture the absolute max torque smash of the ride
@@ -173,25 +169,6 @@ function drawPauseLayout(dc, width, height) {
     dc.drawText(colPeak, y, fSmall, maxInstantTorque.format("%.1f"), jRight);
 }
 ---
-
-
-show progress bar tiny option on next lock
-set lockwindow - set initial value 1800
-
-set different block window 10 - 60 minutes
-
-x reset to defaults 30
-
-layout: EF trend  actual value
-    arc 
-
--- layout 2
-
-[ 📈 EF ]      [ 🎯 VI ]      [ ↻ TQ ]   <-- Clean Icons + Labels in Header
-  ----------------------------------------
-     1.48           1.02           18.5     <-- Moving Actuals
-     1.55 •         1.01 •         16.2 •   <-- Baselines + Trend Dots
-
 
 
 Stats:

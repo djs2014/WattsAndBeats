@@ -14,7 +14,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mDarkBackground as Boolean = false;
 
     hidden var mTrendEngine as TrendEngine = new TrendEngine();
-    hidden var mTestGenerator as TrendEngineGenerator = new TrendEngineGenerator();
+    hidden var mTestGenerator as TrendEngineGenerator =
+        new TrendEngineGenerator();
 
     hidden var mCycloData as CycloData = new CycloData();
     hidden var mActivityStarted as Boolean = false;
@@ -25,12 +26,52 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mAveragePower as Number = 0;
     hidden var mAverageCadence as Number = 0;
 
+    // hidden var mIconFontSmall as FontResource or FontReference;
+    // hidden var mIconFontMedium as FontResource or FontReference;
+    // hidden var mIconFontLarge as FontResource or FontReference;
+    hidden var mShowIconFont as Boolean = false;
+    hidden var mIconHeight as Number = 0;
+    hidden var mIconFont as FontResource or FontReference;
+    hidden var mHeaderFont as Graphics.FontType = Graphics.FONT_MEDIUM;
+
+    // Mapping the icons to variables using their hex codes
+    // Check in BMFont generator, hovering over icons
+    hidden var mHeartIcon as String = "\uF000";
+    hidden var mBulletIcon as String = "\uF001";
+    hidden var mTorqueIcon as String = "\uF002";
     function initialize() {
         DataField.initialize();
         mTrendEngine = getTrendEngine();
         mTrendEngine.setOnBlockCompleted(self, :onBlockCompleted);
+
+        var edgeVersion = $.getEdgeVersion();
+        //System.println("Edge version: " + edgeVersion);
+        mShowIconFont = edgeVersion >= 840;
+        if (mShowIconFont) {
+            loadIconFont(edgeVersion);
+        }
     }
 
+    function loadIconFont(edgeVersion as Number) as Void {
+        try {
+            if (edgeVersion < 1050) {
+                mIconFont =
+                    WatchUi.loadResource(Rez.Fonts.iconFontSmall) as
+                    FontResource or FontReference;
+                mIconHeight = 24;
+                mHeaderFont = Graphics.FONT_MEDIUM;
+            } else {
+                mIconFont =
+                    WatchUi.loadResource(Rez.Fonts.iconFontLarge) as
+                    FontResource or FontReference;
+                mIconHeight = 48;
+                mHeaderFont = Graphics.FONT_MEDIUM;
+            }
+        } catch (ex) {
+            System.println("Error loading icon font: " + ex);
+            mShowIconFont = false; // Fallback to not showing icons if fonts fail to load
+        }
+    }
     function onBlockCompleted(data as Array<Float>) as Void {
         System.println(["Block completed: ", data]);
         mCycloData.BlockCompleted = Time.now().value();
@@ -74,56 +115,39 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mActivityStarted = false;
             }
         }
-        
+
         mAveragePower = $.getActivityValue(info, :averagePower, 0) as Number;
         mAverageCadence =
             $.getActivityValue(info, :averageCadence, 0) as Number;
 
         if (mTrendEngine.isDemo()) {
-            
-            // if (mDemoCounter <= 0) {
-            //     // Reset the demo state when starting a new demo
-            //     // TODO -> demo logic in generator class
-            //     mDemoPaused = false;
-            // }
-            // Always start demo, when press activity started then paused to show the paused screen with data, 
-            // TODO 
-            // when press lap key // TODO add separate button for starting demo instead of overloading lap key
-            // TODO and display LAP==PAUSE screen with the data from the demo, then on next press of lap key, start the demo with the fake data and trends,
-            // then unpause to resume the demo and show the trends and warning messages
-
-
-            //if (!mPaused) {
+            if (!mPaused) {
                 processTrendEngine(info);
-            //}
+            }
             // Override the averages with the generated demo data averages to show realistic values during the demo
-            var averages = mTestGenerator.getAverages(mDemoCounter-1);
+            var averages = mTestGenerator.getAverages(mDemoCounter - 1);
             mAverageCadence = averages[0].toNumber();
             mAveragePower = averages[1].toNumber();
-        }
-        else if (!mPaused  ) {
+        } else if (!mPaused) {
             processTrendEngine(info);
         }
-        
     }
 
-    // This event fires instantly when a lap is recorded, only when activity is started.
-    function onTimerLap() {        
-        System.println("Lap button pressed - toggling demo paused state");
-        mDemoPaused = !mDemoPaused;
-        // // 1. Play a subtle system alert tone so the rider knows the app registered the lap
-        // if (Attention has :playTone) {
-        //     Attention.playTone(Attention.TONE_LAP);
-        // }
-
-        // 2. FORCIBLY RE-LOCK YOUR BASELINES IMMEDIATELY
-        // This lets the rider manually reset their target averages for a new interval/hill climb!
-        // lockedEF = actualEF;
-        // lockedVI = actualVI;
-        // lockedTorque = actualTorque;
-
-        // Reset your localized active second timer if you want lap-specific intervals
-        // totalActiveSeconds = 0; 
+    function onTimerLap2(trigger as DataField.LapInfoType) as Lang.Boolean {
+        if (trigger == DataField.LAP_TRIGGER_MANUAL) {
+            System.println("Lap button pressed");
+            if ($.gOnLapKeyLockData) {
+                var locked = mTrendEngine.lockNow();
+                if (locked) {
+                    // 1. Play a subtle system alert tone so the rider knows the app registered the lap
+                    if (Attention has :playTone) {
+                        Attention.playTone(Attention.TONE_LAP);
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     hidden function processTrendEngine(info as Activity.Info) as Void {
@@ -211,6 +235,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
     }
 
+    // TODO sublabel explaining the EF/VI/TQ
+    // Display Avg, intepretation drop etc, MAX
     function drawPausedState(dc as Dc) as Void {
         var color = getThemeColor(mDarkBackground);
         dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
@@ -231,7 +257,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
             textVI = "VI";
             textTorque = "TQ";
         }
-
 
         var textPaused = "PAUSED";
         // Pause indicator in the center
@@ -302,10 +327,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
             var globalNP = mTrendEngine.getNormalizedPower();
             globalVI = globalNP / mAveragePower;
 
-        System.println(["Avg cadence:", mAverageCadence,
-         "Avg power:", mAveragePower, "Global NP:", globalNP
-        ]);
-
+            System.println([
+                "Avg cadence:",
+                mAverageCadence,
+                "Avg power:",
+                mAveragePower,
+                "Global NP:",
+                globalNP,
+            ]);
         }
         dc.drawText(
             width * 0.15,
@@ -395,12 +424,13 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
             // Get progress until next block as a time
             infoMessage =
-                (locked ? "NEXT" : "FIRST") + " LOCK IN: " +
+                (locked ? "NEXT" : "FIRST") +
+                " LOCK IN: " +
                 $.secondsToHourMinutesSeconds(
                     mTrendEngine.getSecondsToNextLock()
                 );
         }
-        
+
         var fontInfoMessage = Graphics.FONT_XTINY;
         dc.drawText(
             width / 2,
@@ -616,31 +646,60 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var actualsY = (height * 0.38).toNumber();
         var baselinesY = (height * 0.7).toNumber();
 
-        // --- STEP 1: DRAW HEADERS (Labels + Unicode Symbols) ---
-        var headerFont = Graphics.FONT_SMALL;
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        // --- STEP 1: DRAW HEADERS (Labels + icons) ---
+        var textEF = "EF";
+        var textVI = "VI";
+        var textTQ = "TQ";
 
-        dc.drawText(
-            col1X,
-            headerY,
-            headerFont,
-            "EF",
-            Graphics.TEXT_JUSTIFY_CENTER
-        );
-        dc.drawText(
-            col2X,
-            headerY,
-            headerFont,
-            "VI",
-            Graphics.TEXT_JUSTIFY_CENTER
-        );
-        dc.drawText(
-            col3X,
-            headerY,
-            headerFont,
-            "TQ",
-            Graphics.TEXT_JUSTIFY_CENTER
-        );
+        // Default
+        var yCenter = headerY;
+        var headerFont = mHeaderFont;
+        var alignHeaderText = Graphics.TEXT_JUSTIFY_CENTER;
+
+        if (mShowIconFont) {
+            var iconYOffset = -5; // Nudge icons up a bit for better vertical alignment with text
+            var iconFontHeight = mIconHeight;
+            var nativeFontHeight = dc.getFontHeight(headerFont);
+            var headerRowHeight =
+                nativeFontHeight > iconFontHeight
+                    ? nativeFontHeight
+                    : iconFontHeight;
+            yCenter = headerY + headerRowHeight / 2;
+
+            var alignRightVCenter =
+                Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER;
+            alignHeaderText =
+                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER;
+
+            dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
+            dc.drawText(
+                col1X,
+                yCenter + iconYOffset,
+                mIconFont,
+                mHeartIcon, // EF
+                alignRightVCenter
+            );
+            dc.drawText(
+                col2X,
+                yCenter + iconYOffset,
+                mIconFont,
+                mBulletIcon, // VI
+                alignRightVCenter
+            );
+            dc.drawText(
+                col3X,
+                yCenter + iconYOffset,
+                mIconFont,
+                mTorqueIcon, // TQ
+                alignRightVCenter
+            );
+        }
+
+        // With or without icons,
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(col1X, yCenter, headerFont, textEF, alignHeaderText);
+        dc.drawText(col2X, yCenter, headerFont, textVI, alignHeaderText);
+        dc.drawText(col3X, yCenter, headerFont, textTQ, alignHeaderText);
 
         // --- STEP 2: DRAW DOCK DIVIDER LINES ---
         dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
@@ -736,7 +795,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             lockedVI.format("%.2f") +
                 " " +
                 getTrendArrow(trendVI, drawUpTriangleForBad),
-            Graphics.TEXT_JUSTIFY_CENTER 
+            Graphics.TEXT_JUSTIFY_CENTER
         );
 
         // Column 3: Torque Baseline + Trend Arrow
@@ -755,7 +814,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             lockedTorque.format("%.1f") +
                 " " +
                 getTrendArrow(trendTorque, drawUpTriangleForBad),
-            Graphics.TEXT_JUSTIFY_CENTER 
+            Graphics.TEXT_JUSTIFY_CENTER
         );
     }
 
@@ -933,6 +992,63 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mWarningMessage = "";
             mWarningColor = Graphics.COLOR_LT_GRAY;
         }
+    }
+
+    // Draws a scalable bullseye/target icon centered at (dcX, dcY)
+    function drawTargetIcon(
+        dc as Dc,
+        dcX as Number,
+        dcY as Number,
+        maxRadius as Number
+    ) as Void {
+        // 1. Outer Ring (Red)
+        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(dcX, dcY, maxRadius);
+
+        // 2. Middle Ring (White / Background color)
+        // Scales down to 66% of the max radius
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(dcX, dcY, (maxRadius * 0.66).toNumber());
+
+        // 3. Center Bullseye (Red)
+        // Scales down to 33% of the max radius
+        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(dcX, dcY, (maxRadius * 0.33).toNumber());
+    }
+
+    // Draws a scalable heart icon centered at (dcX, dcY)
+    function drawHeartIcon(
+        dc as Dc,
+        dcX as Number,
+        dcY as Number,
+        size as Number
+    ) as Void {
+        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
+
+        // Calculate dimensions based on the target size
+        var radius = (size / 4).toNumber();
+        var circleY = dcY - radius;
+
+        // Left and Right circle centers
+        var leftCircleX = dcX - radius;
+        var rightCircleX = dcX + radius;
+
+        // 1. Draw the two upper rounded lobes
+        dc.fillCircle(leftCircleX, circleY, radius);
+        dc.fillCircle(rightCircleX, circleY, radius);
+
+        // 2. Draw the bottom V-shape using a polygon (triangle)
+        // Point 1: Leftmost edge of the left circle
+        // Point 2: Rightmost edge of the right circle
+        // Point 3: The bottom tip of the heart
+        var points =
+            [
+                [leftCircleX - radius, circleY] as Array<Number>,
+                [rightCircleX + radius, circleY] as Array<Number>,
+                [dcX, dcY + (radius * 1.5).toNumber()] as Array<Number>,
+            ] as Array<Array<Number> >;
+
+        dc.fillPolygon(points);
     }
 }
 

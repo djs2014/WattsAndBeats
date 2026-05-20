@@ -1,3 +1,4 @@
+// Version: 2026-05-20 EdgeClass
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
@@ -11,6 +12,7 @@ enum EdgeField {
 }
 
 var EdgeVersion as Number = 0;
+var EdgeClass as Number = 0;
 
 function getEdgeVersion() as Number {
   if ($.EdgeVersion > 0) {
@@ -22,6 +24,10 @@ function getEdgeVersion() as Number {
     $.EdgeVersion = 1050;
     return $.EdgeVersion;
   }
+  if (settings.screenWidth >= 420 && settings.screenHeight >= 600) {
+    $.EdgeVersion = 850;
+    return $.EdgeVersion;
+  }
 
   if (settings.screenWidth >= 282 && settings.screenHeight >= 470) {
     $.EdgeVersion = 1040; // or 1030
@@ -30,6 +36,29 @@ function getEdgeVersion() as Number {
 
   $.EdgeVersion = 840; // or 830
   return $.EdgeVersion;
+}
+function getEdgeClass() as Number {
+  if ($.EdgeClass > 0) {
+    return $.EdgeClass;
+  }
+  var settings = System.getDeviceSettings();
+
+  if (settings.screenWidth >= 480 && settings.screenHeight >= 800) {
+    $.EdgeClass = 50;
+    return $.EdgeClass;
+  }
+  if (settings.screenWidth >= 420 && settings.screenHeight >= 600) {
+    $.EdgeClass = 50;
+    return $.EdgeClass;
+  }
+
+  if (settings.screenWidth >= 282 && settings.screenHeight >= 470) {
+    $.EdgeClass = 40;
+    return $.EdgeClass;
+  }
+
+  $.EdgeClass = 40;
+  return $.EdgeClass;
 }
 
 // For edge <= 1040
