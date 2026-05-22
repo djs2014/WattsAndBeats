@@ -26,52 +26,30 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mAveragePower as Number = 0;
     hidden var mAverageCadence as Number = 0;
 
-    // hidden var mIconFontSmall as FontResource or FontReference;
-    // hidden var mIconFontMedium as FontResource or FontReference;
-    // hidden var mIconFontLarge as FontResource or FontReference;
-    hidden var mShowIconFont as Boolean = false;
-    hidden var mIconHeight as Number = 0;
-    hidden var mIconFont as FontResource or FontReference;
     hidden var mHeaderFont as Graphics.FontType = Graphics.FONT_MEDIUM;
 
-    // Mapping the icons to variables using their hex codes
-    // Check in BMFont generator, hovering over icons
-    hidden var mHeartIcon as String = "\uF000";
-    hidden var mBulletIcon as String = "\uF001";
-    hidden var mTorqueIcon as String = "\uF002";
+    hidden var mBeepOnEFWarningHandled as Boolean = false;
+    hidden var mBeepOnVIWarningHandled as Boolean = false;
+    hidden var mBeepOnTQWarningHandled as Boolean = false;
+
+    hidden var mColorCritical as ColorType = Graphics.COLOR_RED;
+    hidden var mColorHigh as ColorType = Graphics.COLOR_YELLOW;
+    hidden var mColorWarning as ColorType = Graphics.COLOR_YELLOW;
+    hidden var mColorNeutral as ColorType = Graphics.COLOR_LT_GRAY;
+
     function initialize() {
         DataField.initialize();
         mTrendEngine = getTrendEngine();
         mTrendEngine.setOnBlockCompleted(self, :onBlockCompleted);
 
         var edgeVersion = $.getEdgeVersion();
-        //System.println("Edge version: " + edgeVersion);
-        mShowIconFont = edgeVersion >= 840;
-        if (mShowIconFont) {
-            loadIconFont(edgeVersion);
+
+        // 30 series no orange
+        if (Graphics has :COLOR_ORANGE) {
+            mColorHigh = Graphics.COLOR_ORANGE;
         }
     }
 
-    function loadIconFont(edgeVersion as Number) as Void {
-        try {
-            if (edgeVersion < 1050) {
-                mIconFont =
-                    WatchUi.loadResource(Rez.Fonts.iconFontSmall) as
-                    FontResource or FontReference;
-                mIconHeight = 24;
-                mHeaderFont = Graphics.FONT_MEDIUM;
-            } else {
-                mIconFont =
-                    WatchUi.loadResource(Rez.Fonts.iconFontLarge) as
-                    FontResource or FontReference;
-                mIconHeight = 48;
-                mHeaderFont = Graphics.FONT_MEDIUM;
-            }
-        } catch (ex) {
-            System.println("Error loading icon font: " + ex);
-            mShowIconFont = false; // Fallback to not showing icons if fonts fail to load
-        }
-    }
     function onBlockCompleted(data as Array<Float>) as Void {
         System.println(["Block completed: ", data]);
         mCycloData.BlockCompleted = Time.now().value();
@@ -84,6 +62,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
         mLatestBlockEF = data[0];
         mBlockCompletedCounter = mBlockCompletedCounter + 1;
+
+        if ($.gBeepOnLock) {
+            alertOnEvent(Attention.TONE_INTERVAL_ALERT);
+        }
     }
 
     function onLayout(dc as Dc) as Void {
@@ -103,9 +85,15 @@ class WattsAndBeatsView extends WatchUi.DataField {
             if (!mActivityStarted) {
                 mActivityStarted = info.timerState != Activity.TIMER_STATE_OFF;
                 if (mActivityStarted) {
-                    System.println("Activity started - resetting trend engine");
-                    mTrendEngine.reset();
-                    mCycloData = new CycloData();
+                    if (mTrendEngine.isDemo()) {
+                        System.println("Engine in demo mode");
+                    } else {
+                        System.println(
+                            "Activity started - resetting trend engine"
+                        );
+                        mTrendEngine.reset();
+                        mCycloData = new CycloData();
+                    }
                 }
             } else if (
                 mActivityStarted and
@@ -131,25 +119,73 @@ class WattsAndBeatsView extends WatchUi.DataField {
         } else if (!mPaused) {
             processTrendEngine(info);
         }
+        processTrendEngineWarnings();
     }
 
     function onTimerLap2(trigger as DataField.LapInfoType) as Lang.Boolean {
+        System.println(["Lap triggered: ", trigger]);
         if (trigger == DataField.LAP_TRIGGER_MANUAL) {
             System.println("Lap button pressed");
-            if ($.gOnLapKeyLockData) {
+            if ($.gBeepOnLap) {
+                alertOnEvent(Attention.TONE_LAP);
+            }
+            if ($.gLockOnLapKey) {
                 var locked = mTrendEngine.lockNow();
                 if (locked) {
-                    // 1. Play a subtle system alert tone so the rider knows the app registered the lap
-                    if (Attention has :playTone) {
-                        Attention.playTone(Attention.TONE_LAP);
-                    }
+                    // Handled, do no trigger onTimerLap();
                     return true;
                 }
+                // Handled, do no trigger onTimerLap() to try another lockNow() attempt;
+                return $.gLockOnAutoLap;
             }
         }
         return false;
     }
 
+    function onTimerLap() as Void {
+        System.println("Lap event triggered");
+        if ($.gLockOnAutoLap) {
+            if ($.gBeepOnLap) {
+                alertOnEvent(Attention.TONE_LAP);
+            }
+            var locked = mTrendEngine.lockNow();
+            if (locked) {
+                System.println("Data locked on auto lap");
+            }
+        }
+    }
+
+    hidden function alertOnEvent(
+        options as
+            Attention.Tone or
+                {
+                :toneProfile as Lang.Array<Attention.ToneProfile>,
+                :repeatCount as Lang.Number,
+            }
+    ) as Void {
+        // Example of playing a tone on a specific event (e.g., lock)
+        if (Attention has :playTone && System.getDeviceSettings().tonesOn) {
+            Attention.playTone(Attention.TONE_LAP);
+        }
+    }
+
+    hidden function toastOnEvent(message as String) as Void {
+        if (WatchUi has :showToast) {
+            // TODO icon per kind of warning
+            WatchUi.showToast(message, null);
+        }
+    }
+
+    hidden function backlightOnAlert() as Void {
+        if (Attention has :backlight) {
+            try {
+                Attention.backlight(true);
+            } catch (ex) {
+                System.println("Attention.backlight(true) failed");
+                ex.printStackTrace();
+            }
+        }
+    }
     hidden function processTrendEngine(info as Activity.Info) as Void {
         var cadence = $.getActivityValue(info, :currentCadence, 0) as Number;
         var power = $.getActivityValue(info, :currentPower, 0) as Number;
@@ -166,7 +202,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mDemoCounter = 0;
                 mDemoPaused = false;
                 mTrendEngine.setDemo(false);
-                mTrendEngine.setLockWindowSec($.gLockWindowSec);
+                mTrendEngine.setLockWindowSec($.gLockIntervalSec);
                 mTrendEngine.reset();
             }
         }
@@ -185,6 +221,64 @@ class WattsAndBeatsView extends WatchUi.DataField {
         mCycloData.Elapsed = mTrendEngine.getElapsedSeconds();
         mCycloData.BufferSize = mTrendEngine.getBufferSize();
     }
+
+    function processTrendEngineWarnings() as Void {
+        var trendEF = mCycloData.TrendEF;
+        var trendVI = mCycloData.TrendVI;
+        var trendTorque = mCycloData.TrendTorque;
+        var hasWarning = trendEF == -1 || trendVI == -1 || trendTorque == -1;
+
+        // Reset handled state if trend is no longer in warning state
+        if (trendEF != -1 && mBeepOnEFWarningHandled) {
+            mBeepOnEFWarningHandled = false;
+        }
+        if (trendVI != -1 && mBeepOnVIWarningHandled) {
+            mBeepOnVIWarningHandled = false;
+        }
+        if (trendTorque != -1 && mBeepOnTQWarningHandled) {
+            mBeepOnTQWarningHandled = false;
+        }
+
+        if (!hasWarning) {
+            return;
+        }
+        // There is a warning
+        if ($.gBacklightOnAlert) {
+            backlightOnAlert();
+        }
+
+        // Prio EF over Torque over Vi
+        if (trendEF == -1 and !mBeepOnEFWarningHandled) {
+            if ($.gBeepOnEFWarning) {
+                alertOnEvent(Attention.TONE_ALARM);
+            }
+            if ($.gToastOnEFWarning) {
+                toastOnEvent("Aerobic decoupling! (EF)");
+            }
+            mBeepOnEFWarningHandled = true;
+        } else if (
+            $.gBeepOnTQWarning and
+            trendTorque == -1 and
+            !mBeepOnTQWarningHandled
+        ) {
+            if ($.gBeepOnTQWarning) {
+                alertOnEvent(Attention.TONE_ALARM);
+            }
+            if ($.gToastOnTQWarning) {
+                toastOnEvent("Torque Warning! (TQ)");
+            }
+            mBeepOnTQWarningHandled = true;
+        } else if (trendVI == -1 and !mBeepOnVIWarningHandled) {
+            if ($.gBeepOnVIWarning) {
+                alertOnEvent(Attention.TONE_ALARM);
+            }
+            if ($.gToastOnVIWarning) {
+                toastOnEvent("Pacing! (VI)");
+            }
+            mBeepOnVIWarningHandled = true;
+        }
+    }
+
     // Display the value you computed here. This will be called
     // once a second when the data field is visible.
     function onUpdate(dc as Dc) as Void {
@@ -384,6 +478,16 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return darkMode ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
         }
     }
+
+    function getBottomWarningBarYAndHeight(height as Number) as Array<Number> {
+        var barHeight = (height * 0.16).toNumber();
+        if (mEf == EfSmall) {
+            // 2 lines on small field
+            barHeight = (barHeight * 2).toNumber();
+        }
+        var barY = height - barHeight;
+        return [barY, barHeight];
+    }
     function drawBottomWarningBar(
         dc as Dc,
         width as Number,
@@ -401,12 +505,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         var hasWarning = mWarningMessage.length() > 0;
         var infoMessage;
-        var barHeight = (height * 0.16).toNumber();
-        if (mEf == EfSmall) {
-            // 2 lines on small field
-            barHeight = barHeight * 2;
-        }
-        var barY = height - barHeight;
+
+        var barYAndHeight = getBottomWarningBarYAndHeight(height);
+        var barY = barYAndHeight[0];
+        var barHeight = barYAndHeight[1];
         if (hasWarning) {
             infoMessage = mWarningMessage;
 
@@ -454,8 +556,14 @@ class WattsAndBeatsView extends WatchUi.DataField {
         // Set row heights based on screen size (saving bottom 20% for the warning bar)
         var rowHeight = ((height * 0.75) / 4).toNumber(); // 4 rows: header + 3 metrics
         var startY = (height * 0.08).toNumber();
-        var shapeSize = (rowHeight * 0.45).toNumber();
+        var shapeSize = (rowHeight * 0.5).toNumber();
         var headerOffset = (rowHeight * 0.4).toNumber(); // Header text is a bit higher than metric rows
+
+        // Highlight box when any of the metrics is in warning state
+        var warningPillx = (width * 0.05).toNumber();
+        var warningPillWidth = (width * 0.95).toNumber();
+        var warningPillHeight = (rowHeight * 1.05).toNumber();
+        var warningPillYoffset = (rowHeight * 0.7).toNumber();
 
         // 2. DRAW THE HEADER ROW
         dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
@@ -495,11 +603,22 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // --- ROW 1: EF ---
         var yEF = startY + rowHeight;
-
         var efString = actualEF.format("%.2f");
         var efParts = $.splitStringAtDot(efString); // ["1", "58"]
 
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        if (trendEF == -1) {
+            // Draw warning highlight for EF row RED
+            dc.setColor(mColorCritical, mColorCritical);
+            dc.fillRectangle(
+                warningPillx,
+                yEF - warningPillYoffset,
+                warningPillWidth,
+                warningPillHeight
+            );
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        } else {
+            dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        }
         dc.drawText(
             labelX,
             yEF,
@@ -527,7 +646,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendEF,
             color[:good],
-            color[:bad],
+            Graphics.COLOR_WHITE,
             color[:neutral]
         );
         var drawUpTriangleForBad = false; // EF dropping is bad, so trend arrow points down for bad trend
@@ -545,7 +664,20 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var viString = actualVI.format("%.2f");
         var viParts = $.splitStringAtDot(viString);
 
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        if (trendVI == -1) {
+            // Draw warning highlight for VI row YELLOW
+            dc.setColor(mColorWarning, mColorWarning);
+            dc.fillRectangle(
+                warningPillx,
+                yVI - warningPillYoffset,
+                warningPillWidth,
+                warningPillHeight
+            );
+            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        } else {
+            dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        }
+
         dc.drawText(
             labelX,
             yVI,
@@ -572,7 +704,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendVI,
             color[:good],
-            color[:warning],
+            Graphics.COLOR_BLACK,
             color[:neutral]
         );
         drawUpTriangleForBad = true; // VI spiking is bad, so trend arrow points up for bad trend
@@ -590,7 +722,20 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var tqString = actualTorque.format("%.2f");
         var tqParts = $.splitStringAtDot(tqString);
 
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        if (trendTorque == -1) {
+            // Draw warning highlight for TQ row ORANGE
+            dc.setColor(mColorHigh, mColorHigh);
+            dc.fillRectangle(
+                warningPillx,
+                yTQ - warningPillYoffset,
+                warningPillWidth,
+                warningPillHeight
+            );
+            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        } else {
+            dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        }
+
         dc.drawText(
             labelX,
             yTQ,
@@ -617,7 +762,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendTorque,
             color[:good],
-            color[:bad],
+            Graphics.COLOR_BLACK,
             color[:neutral]
         );
         drawUpTriangleForBad = true; // Torque spiking is bad, so trend arrow points up for bad trend
@@ -646,59 +791,137 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var actualsY = (height * 0.38).toNumber();
         var baselinesY = (height * 0.7).toNumber();
 
+        // Highlight box when any of the metrics is in warning state
+        var barYAndHeight = getBottomWarningBarYAndHeight(height);
+        var barY = barYAndHeight[0];
+        var barHeight = barYAndHeight[1];
+
+        var warningPillY = (height * 0.05).toNumber();
+        var warningPillWidth = (width * 0.3).toNumber();
+        var warningPillHeight =
+            height - barHeight - (warningPillY * 2).toNumber();
+        // var warningPillY = (height * 0.3).toNumber();
+
         // --- STEP 1: DRAW HEADERS (Labels + icons) ---
         var textEF = "EF";
         var textVI = "VI";
         var textTQ = "TQ";
+
+        var actualEF = mCycloData.ActualEF;
+        var actualVI = mCycloData.ActualVI;
+        var actualTorque = mCycloData.ActualTorque;
+        var trendEF = mCycloData.TrendEF;
+        var trendVI = mCycloData.TrendVI;
+        var trendTorque = mCycloData.TrendTorque;
+        var lockedEF = mCycloData.LockedEF;
+        var lockedVI = mCycloData.LockedVI;
+        var lockedTorque = mCycloData.LockedTorque;
 
         // Default
         var yCenter = headerY;
         var headerFont = mHeaderFont;
         var alignHeaderText = Graphics.TEXT_JUSTIFY_CENTER;
 
-        if (mShowIconFont) {
-            var iconYOffset = -5; // Nudge icons up a bit for better vertical alignment with text
-            var iconFontHeight = mIconHeight;
-            var nativeFontHeight = dc.getFontHeight(headerFont);
-            var headerRowHeight =
-                nativeFontHeight > iconFontHeight
-                    ? nativeFontHeight
-                    : iconFontHeight;
-            yCenter = headerY + headerRowHeight / 2;
+        var EFwarning = trendEF == -1;
+        var VIwarning = trendVI == -1;
+        var TQwarning = trendTorque == -1;
 
-            var alignRightVCenter =
-                Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER;
-            alignHeaderText =
-                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER;
-
-            dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
-            dc.drawText(
-                col1X,
-                yCenter + iconYOffset,
-                mIconFont,
-                mHeartIcon, // EF
-                alignRightVCenter
-            );
-            dc.drawText(
-                col2X,
-                yCenter + iconYOffset,
-                mIconFont,
-                mBulletIcon, // VI
-                alignRightVCenter
-            );
-            dc.drawText(
-                col3X,
-                yCenter + iconYOffset,
-                mIconFont,
-                mTorqueIcon, // TQ
-                alignRightVCenter
+        if (EFwarning) {
+            // Draw warning highlight for EF column RED
+            dc.setColor(mColorCritical, mColorCritical);
+            dc.fillRectangle(
+                col1X - warningPillWidth / 2,
+                warningPillY,
+                warningPillWidth,
+                warningPillHeight
             );
         }
+        if (VIwarning) {
+            // Draw warning highlight for VI column YELLOW
+            dc.setColor(mColorWarning, mColorWarning);
+            dc.fillRectangle(
+                col2X - warningPillWidth / 2,
+                warningPillY,
+                warningPillWidth,
+                warningPillHeight
+            );
+        }
+        if (TQwarning) {
+            // Draw warning highlight for TQ column RED
+            dc.setColor(mColorHigh, mColorHigh);
+            dc.fillRectangle(
+                col3X - warningPillWidth / 2,
+                warningPillY,
+                warningPillWidth,
+                warningPillHeight
+            );
+        }
+        var fontHeight = dc.getFontHeight(headerFont);
+        var iconY = yCenter + (fontHeight * 0.33).toNumber();
+        var heartColor = getTrendDisplayColor(
+            trendEF,
+            color[:faded],
+            Graphics.COLOR_WHITE,
+            color[:faded]
+        );
+        drawHeartIcon(dc, col1X - fontHeight, iconY, fontHeight, heartColor);
 
-        // With or without icons,
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        var targetColor = getTrendDisplayColor(
+            trendVI,
+            color[:faded],
+            Graphics.COLOR_BLACK,
+            color[:faded]
+        );
+        var targetColorInner = color[:background];
+        if (VIwarning) {
+            // Is background warning pill
+            targetColorInner = mColorWarning;
+        }
+        drawTargetIcon(
+            dc,
+            col2X - fontHeight,
+            iconY,
+            (fontHeight / 2).toNumber(),
+            targetColor,
+            targetColorInner
+        );
+
+        var torqueColor = getTrendDisplayColor(
+            trendTorque,
+            color[:faded],
+            Graphics.COLOR_BLACK,
+            color[:faded]
+        );
+        var torqueOffsetY = (fontHeight * 0.4).toNumber();
+        var torqueOffsetX = (fontHeight * 0.5).toNumber();
+        drawScalablePedalFaded(
+            dc,
+            col3X - torqueOffsetX,
+            iconY - torqueOffsetY,
+            (fontHeight * 0.8).toNumber(),
+            true,
+            torqueColor
+        );
+        drawScalablePedalFaded(
+            dc,
+            col3X + torqueOffsetX,
+            iconY + torqueOffsetY,
+            (fontHeight * 0.8).toNumber(),
+            false,
+            torqueColor
+        );
+
+        // Header text
+        var colorTextEF = EFwarning ? Graphics.COLOR_WHITE : color[:text];
+        var colorTextVI = VIwarning ? Graphics.COLOR_BLACK : color[:text];
+        var colorTextTQ = TQwarning ? Graphics.COLOR_BLACK : color[:text];
+
+        dc.setColor(colorTextEF, Graphics.COLOR_TRANSPARENT);
         dc.drawText(col1X, yCenter, headerFont, textEF, alignHeaderText);
+        dc.setColor(colorTextVI, Graphics.COLOR_TRANSPARENT);
         dc.drawText(col2X, yCenter, headerFont, textVI, alignHeaderText);
+        dc.setColor(colorTextTQ, Graphics.COLOR_TRANSPARENT);
+
         dc.drawText(col3X, yCenter, headerFont, textTQ, alignHeaderText);
 
         // --- STEP 2: DRAW DOCK DIVIDER LINES ---
@@ -722,18 +945,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // --- STEP 3: DRAW LIVE MOVING ACTUALS (Large, crisp text) ---
         var fontActuals = Graphics.FONT_LARGE;
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
 
-        var actualEF = mCycloData.ActualEF;
-        var actualVI = mCycloData.ActualVI;
-        var actualTorque = mCycloData.ActualTorque;
-        var trendEF = mCycloData.TrendEF;
-        var trendVI = mCycloData.TrendVI;
-        var trendTorque = mCycloData.TrendTorque;
-        var lockedEF = mCycloData.LockedEF;
-        var lockedVI = mCycloData.LockedVI;
-        var lockedTorque = mCycloData.LockedTorque;
-
+        dc.setColor(colorTextEF, Graphics.COLOR_TRANSPARENT);
         // Use your decimal-aligned formatting strategy here
         dc.drawText(
             col1X,
@@ -742,6 +955,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             actualEF.format("%.2f"),
             Graphics.TEXT_JUSTIFY_CENTER
         );
+        dc.setColor(colorTextVI, Graphics.COLOR_TRANSPARENT);
         dc.drawText(
             col2X,
             actualsY,
@@ -749,6 +963,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             actualVI.format("%.2f"),
             Graphics.TEXT_JUSTIFY_CENTER
         );
+        dc.setColor(colorTextTQ, Graphics.COLOR_TRANSPARENT);
         dc.drawText(
             col3X,
             actualsY,
@@ -765,7 +980,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendEF,
             color[:good],
-            color[:bad],
+            Graphics.COLOR_WHITE,
             color[:neutral]
         );
         var drawUpTriangleForBad = false; // EF dropping is bad, so trend arrow points down for bad trend
@@ -784,7 +999,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendVI,
             color[:good],
-            color[:warning],
+            Graphics.COLOR_BLACK,
             color[:neutral]
         );
         drawUpTriangleForBad = true;
@@ -803,7 +1018,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendTorque,
             color[:good],
-            color[:bad],
+            Graphics.COLOR_BLACK,
             color[:neutral]
         );
         drawUpTriangleForBad = false; // Torque dropping is bad, so trend arrow points down for bad trend
@@ -895,6 +1110,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
             :text => darkBackground
                 ? Graphics.COLOR_WHITE
                 : Graphics.COLOR_BLACK,
+            :background => darkBackground
+                ? Graphics.COLOR_BLACK
+                : Graphics.COLOR_WHITE,
             :header => darkBackground
                 ? Graphics.COLOR_LT_GRAY
                 : Graphics.COLOR_LT_GRAY,
@@ -910,9 +1128,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
             :good => darkBackground
                 ? Graphics.COLOR_GREEN
                 : Graphics.COLOR_GREEN,
-            :warning => darkBackground
-                ? Graphics.COLOR_YELLOW
-                : Graphics.COLOR_ORANGE,
+            :critial => mColorCritical,
+            :high => mColorHigh,
+            :warning => mColorWarning,
             :bad => darkBackground
                 ? Graphics.COLOR_PINK
                 : Graphics.COLOR_PURPLE,
@@ -935,6 +1153,20 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
     }
 
+    function getTrendDisplayColor(
+        trend as Number,
+        colorGood as ColorType,
+        colorBad as ColorType,
+        colorNeutral as ColorType
+    ) as ColorType {
+        if (trend > 0) {
+            return colorGood;
+        } else if (trend < 0) {
+            return colorBad;
+        } else {
+            return colorNeutral;
+        }
+    }
     function drawTrendArrow(
         dc as Dc,
         x as Number,
@@ -975,63 +1207,66 @@ class WattsAndBeatsView extends WatchUi.DataField {
         // Priority 1: Serious Cardiorespiratory Fatigue (EF dropping)
         if (trendEF == -1) {
             mWarningMessage = "DECOUPLING DETECTED:" + sep + "HYDRATE & PACE";
-            mWarningColor = Graphics.COLOR_RED;
+            mWarningColor = mColorCritical;
         }
         // Priority 2: High Muscle Strain (Torque too high)
         else if (trendTorque == -1) {
             mWarningMessage = "LEGS MASHING:" + sep + "SHIFT DOWN & SPIN";
-            mWarningColor = Graphics.COLOR_RED; // Or COLOR_ORANGE if preferred
+            mWarningColor = mColorHigh;
         }
         // Priority 3: Erratic pacing (VI spiking)
         else if (trendVI == -1) {
             mWarningMessage = "BURNING MATCHES:" + sep + "SMOOTH EFFORT";
-            mWarningColor = Graphics.COLOR_YELLOW;
+            mWarningColor = mColorWarning;
         }
         // Default State
         else {
             mWarningMessage = "";
-            mWarningColor = Graphics.COLOR_LT_GRAY;
+            mWarningColor = mColorNeutral;
         }
     }
 
-    // Draws a scalable bullseye/target icon centered at (dcX, dcY)
+    // Draws a scalable bullseye/target icon centered at (cx, cy)
     function drawTargetIcon(
         dc as Dc,
-        dcX as Number,
-        dcY as Number,
-        maxRadius as Number
+        cx as Number,
+        cy as Number,
+        maxRadius as Number,
+        colorOuter as ColorType,
+        colorInner as ColorType
     ) as Void {
         // 1. Outer Ring (Red)
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(dcX, dcY, maxRadius);
+        dc.setColor(colorOuter, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, maxRadius);
 
         // 2. Middle Ring (White / Background color)
         // Scales down to 66% of the max radius
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(dcX, dcY, (maxRadius * 0.66).toNumber());
+        dc.setColor(colorInner, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, (maxRadius * 0.66).toNumber());
 
         // 3. Center Bullseye (Red)
         // Scales down to 33% of the max radius
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(dcX, dcY, (maxRadius * 0.33).toNumber());
+        dc.setColor(colorOuter, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, (maxRadius * 0.33).toNumber());
     }
 
-    // Draws a scalable heart icon centered at (dcX, dcY)
+    // Draws a scalable heart icon centered at (cx, cy)
     function drawHeartIcon(
         dc as Dc,
-        dcX as Number,
-        dcY as Number,
-        size as Number
+        cx as Number,
+        cy as Number,
+        size as Number,
+        color as ColorType
     ) as Void {
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
 
         // Calculate dimensions based on the target size
         var radius = (size / 4).toNumber();
-        var circleY = dcY - radius;
+        var circleY = cy - radius;
 
         // Left and Right circle centers
-        var leftCircleX = dcX - radius;
-        var rightCircleX = dcX + radius;
+        var leftCircleX = cx - (radius * 0.7).toNumber();
+        var rightCircleX = cx + (radius * 0.7).toNumber();
 
         // 1. Draw the two upper rounded lobes
         dc.fillCircle(leftCircleX, circleY, radius);
@@ -1043,12 +1278,165 @@ class WattsAndBeatsView extends WatchUi.DataField {
         // Point 3: The bottom tip of the heart
         var points =
             [
-                [leftCircleX - radius, circleY] as Array<Number>,
-                [rightCircleX + radius, circleY] as Array<Number>,
-                [dcX, dcY + (radius * 1.5).toNumber()] as Array<Number>,
+                [leftCircleX - (radius * 1.1).toNumber(), circleY] as
+                    Array<Number>,
+                [rightCircleX + (radius * 1.1).toNumber(), circleY] as
+                    Array<Number>,
+                [cx, cy + (radius * 1.5).toNumber()] as Array<Number>,
             ] as Array<Array<Number> >;
 
         dc.fillPolygon(points);
+    }
+
+    function drawScalablePedalFaded(dc, cx, cy, size, isLeftPedal, color) {
+        // Keep line weights thin so they stay in the background
+        dc.setPenWidth(1);
+
+        var axleLength = (size * 0.3).toNumber();
+        var bodyWidth = (size * 0.6).toNumber();
+        var bodyHeight = (size * 0.45).toNumber();
+        var cornerRadius = (size * 0.1).toNumber();
+
+        var bodyX = isLeftPedal ? cx - axleLength - bodyWidth : cx + axleLength;
+        var bodyY = cy - bodyHeight / 2;
+
+        // Use DARK_GRAY for a beautiful, subtle watermark on a black screen
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        // dc.drawRoundedRectangle(
+        //     bodyX,
+        //     bodyY,
+        //     bodyWidth,
+        //     bodyHeight,
+        //     cornerRadius
+        // );
+        drawPedalWithInsetFill(
+            dc,
+            bodyX,
+            bodyY,
+            bodyWidth,
+            bodyHeight,
+            cornerRadius,
+            color
+        );
+
+        // Draw the tiny connecting spindle axle in dark gray too
+        var axleX = isLeftPedal ? cx - axleLength : cx;
+        dc.fillRectangle(axleX, cy - 2, axleLength, 4);
+    }
+
+    function drawPedalWithInsetFill(
+        dc,
+        bodyX,
+        bodyY,
+        bodyWidth,
+        bodyHeight,
+        cornerRadius,
+        color
+    ) {
+        // 1. Define your internal spacing gap (e.g., 4 pixels of padding space)
+        var gap = 4;
+
+        // 2. Calculate the Inner Fill Dimensions
+        var innerX = bodyX + gap;
+        var innerY = bodyY + gap;
+        var innerWidth = bodyWidth - gap * 2; // Shrinks both left & right edges
+        var innerHeight = bodyHeight - gap * 2; // Shrinks both top & bottom edges
+
+        // Proportional inner radius keeps the curves tracking beautifully parallel
+        var innerRadius = cornerRadius - gap;
+        if (innerRadius < 0) {
+            innerRadius = 0;
+        }
+
+        // 3. DRAW LAYER 1: The Outer Wireframe Line
+        dc.setPenWidth(1);
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        dc.drawRoundedRectangle(
+            bodyX,
+            bodyY,
+            bodyWidth,
+            bodyHeight,
+            cornerRadius
+        );
+
+        // 4. DRAW LAYER 2: The Inner Floating Solid Fill
+        // Use a slightly different shade or color palette state to create depth!
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(
+            innerX,
+            innerY,
+            innerWidth,
+            innerHeight,
+            innerRadius
+        );
+    }
+
+    function drawScalablePedal(dc, cx, cy, size, isLeftPedal) {
+        // Set line thickness proportional to the size of the pedal
+        var penWidth = (size * 0.06).toNumber();
+        if (penWidth < 1) {
+            penWidth = 1;
+        }
+        dc.setPenWidth(penWidth);
+
+        // 1. Calculate dimensions relative to our master size variable
+        var axleLength = (size * 0.35).toNumber();
+        var axleWidth = (size * 0.12).toNumber();
+        var bodyWidth = (size * 0.65).toNumber();
+        var bodyHeight = (size * 0.85).toNumber();
+        var cornerRadius = (size * 0.15).toNumber();
+
+        // 2. Adjust orientation based on whether it's the left or right pedal
+        var direction = isLeftPedal ? -1 : 1;
+
+        // 3. Draw the Axle Spindle (Connecting the crank pivot to the pedal body)
+        var axleX = isLeftPedal ? cx - axleLength : cx;
+        var axleY = cy - axleWidth / 2;
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.fillRectangle(axleX, axleY, axleLength, axleWidth);
+
+        // 4. Draw the Spindle Cap/Pivot point at the crank arm
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, cy, (axleWidth * 1.2).toNumber());
+
+        // 5. Draw the Main Pedal Body Frame
+        var bodyX = isLeftPedal ? cx - axleLength - bodyWidth : cx + axleLength;
+        var bodyY = cy - bodyHeight / 2;
+
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawRoundedRectangle(
+            bodyX,
+            bodyY,
+            bodyWidth,
+            bodyHeight,
+            cornerRadius
+        );
+
+        // 6. Draw Internal Grip Cutouts (The pedal "window" details)
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        var windowWidth = (bodyWidth * 0.7).toNumber();
+        var windowHeight = (bodyHeight * 0.3).toNumber();
+        var windowX = bodyX + (bodyWidth - windowWidth) / 2;
+
+        // Upper window cutout
+        var windowY1 = bodyY + (bodyHeight * 0.15).toNumber();
+        dc.drawRoundedRectangle(
+            windowX,
+            windowY1,
+            windowWidth,
+            windowHeight,
+            (cornerRadius * 0.5).toNumber()
+        );
+
+        // Lower window cutout
+        var windowY2 = bodyY + (bodyHeight * 0.55).toNumber();
+        dc.drawRoundedRectangle(
+            windowX,
+            windowY2,
+            windowWidth,
+            windowHeight,
+            (cornerRadius * 0.5).toNumber()
+        );
     }
 }
 
@@ -1070,9 +1458,6 @@ class CycloData {
 
     public var Elapsed as Number = 0;
     public var BufferSize as Number = 0;
-
-    // public var AveragePower as Number = 0;
-    // public var AverageCadence as Number = 0;
 
     function initialize() {}
 

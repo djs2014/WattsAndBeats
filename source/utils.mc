@@ -823,7 +823,7 @@ function StorageSetValue(
   value as Application.PropertyValueType
 ) as Void {
   try {
-    //System.println(["StorageSetValue key: ", key, " value: ", value]);
+    System.println(["StorageSetValue key: ", key, " value: ", value]);
     Toybox.Application.Storage.setValue(key, value);
   } catch (ex) {
     ex.printStackTrace();
@@ -839,7 +839,7 @@ function getStorageValue(
     // Check if key contains index (for array)
     var idx = stringRight(key, "|", "").toNumber();
     if (idx == null || idx == "") {
-      // System.println(["getStorageValue key", key]);
+      System.println(["getStorageValue key", key]);
       var val = Toybox.Application.Storage.getValue(key);
       if (val != null) {
         return val;
@@ -849,7 +849,7 @@ function getStorageValue(
 
     // Get the value from the stored array
     var storageKey = stringLeft(key, "|", key);
-    // System.println(["getStorageValue storageKey", storageKey]);
+    System.println(["getStorageValue storageKey", storageKey]);
     var array = Toybox.Application.Storage.getValue(storageKey);
     if (array != null) {
       if (idx > -1 && idx < array.size()) {
@@ -875,33 +875,33 @@ function drawDemoBackground(
     secondsLeft = 0;
   }
 
+  var centerX = (width / 2).toNumber();
   //System.println(["Demo seconds left", secondsLeft]);
 
-  var centerX = (width / 2).toNumber();
-  var centerY = (height / 2).toNumber();
-  var radius = (height * 0.34).toNumber(); // Fits just outside your centered data
+  // var centerY = (height / 2).toNumber();
+  // var radius = (height * 0.34).toNumber(); // Fits just outside your centered data
 
   // 2. Draw a faint, dark grey background track circle
-  dc.setPenWidth(3);
-  dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-  dc.drawCircle(centerX, centerY, radius);
+  // dc.setPenWidth(3);
+  // dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+  // dc.drawCircle(centerX, centerY, radius);
 
   // 3. Draw the active remaining time arc (e.g., in a muted blue or purple)
   // Monkey C drawArc uses degrees (0-360) starting from the right side counter-clockwise
-  if (secondsLeft > 0) {
-    var progressPercent = secondsLeft.toFloat() / demoDuration.toFloat();
-    var endAngle = (progressPercent * 360).toNumber();
+  // if (secondsLeft > 0) {
+  //   var progressPercent = secondsLeft.toFloat() / demoDuration.toFloat();
+  //   var endAngle = (progressPercent * 360).toNumber();
 
-    dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
-    dc.drawArc(
-      centerX,
-      centerY,
-      radius,
-      Graphics.ARC_COUNTER_CLOCKWISE,
-      0,
-      endAngle
-    );
-  }
+  //   dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
+  //   dc.drawArc(
+  //     centerX,
+  //     centerY,
+  //     radius,
+  //     Graphics.ARC_COUNTER_CLOCKWISE,
+  //     0,
+  //     endAngle
+  //   );
+  // }
 
   // 4. Print a subtle "DEMO" watermark text at the top center
   dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);

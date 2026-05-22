@@ -29,32 +29,157 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       return;
     }
 
-    if (id instanceof String && id.equals("advanced")) {
-      var advMenu = new WatchUi.Menu2({ :title => "Advanced" });
+    if (id instanceof String && id.equals("lock_data")) {
+      var lockMenu = new WatchUi.Menu2({ :title => "Lock data setings" });
 
       var mi = new WatchUi.MenuItem(
-        "Lock window sec|180-",
+        "Lock interval sec|180-",
         null,
-        "lock_window_sec",
+        "lock_interval_sec",
         null
       );
       mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
-      advMenu.addItem(mi);
+      lockMenu.addItem(mi);
 
-      var boolean = Storage.getValue("onlapkey_lockdata") ? false : false;
-      advMenu.addItem(
+      var boolean;
+      boolean = $.getStorageValue("lock_onlapkey", false) as Boolean;
+      lockMenu.addItem(
         new WatchUi.ToggleMenuItem(
-          "Lock data on lap key",
+          "Lock on lap key",
           null,
-          "onlapkey_lockdata",
+          "lock_onlapkey",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("lock_onautolap", false) as Boolean;
+      lockMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Lock on auto lap",
+          null,
+          "lock_onautolap",
           boolean,
           null
         )
       );
 
       WatchUi.pushView(
-        advMenu,
-        new $.GeneralMenuDelegate(self, advMenu),
+        lockMenu,
+        new $.GeneralMenuDelegate(self, lockMenu),
+        WatchUi.SLIDE_UP
+      );
+      return;
+    }
+
+    if (id instanceof String && id.equals("alerts")) {
+      var alertMenu = new WatchUi.Menu2({ :title => "Alerts" });
+
+      var boolean;
+
+      boolean = Storage.getValue("backlight_onalert") ? false : false;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Backlight on alert",
+          null,
+          "backlight_onalert",
+          boolean,
+          null
+        )
+      );
+
+      // When pressed the lap key
+      boolean = Storage.getValue("beep_onlap") ? false : false;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "On lap (beep)",
+          null,
+          "beep_onlap",
+          boolean,
+          null
+        )
+      );
+
+      boolean = $.getStorageValue("beep_onlock", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "On lock (beep)",
+          null,
+          "beep_onlock",
+          boolean,
+          null
+        )
+      );
+
+      boolean = $.getStorageValue("beep_onEFwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "EF warning (beep)",
+          null,
+          "beep_onEFwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("toast_onEFwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "EF warning (toast)",
+          null,
+          "toast_onEFwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("beep_onVIwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "VI warning (beep)",
+          null,
+          "beep_onVIwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("toast_onVIwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "VI warning (toast)",
+          null,
+          "toast_onVIwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("beep_onTQwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Torque warning (beep)",
+          null,
+          "beep_onTQwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("toast_onTQwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Torque warning (toast)",
+          null,
+          "toast_onTQwarning",
+          boolean,
+          null
+        )
+      );
+
+      // on ef warning beep_onEFwarning
+      // on vi warning beep_onVIwarning
+      // on torque warning beep_onTQwarning
+
+      // toast options warnings
+
+      WatchUi.pushView(
+        alertMenu,
+        new $.GeneralMenuDelegate(self, alertMenu),
         WatchUi.SLIDE_UP
       );
       return;

@@ -65,10 +65,15 @@ class TrendEngine {
         if (isDemo) {
             lockStep1800 = 180;
         }
-        reset();
     }
     function setLockWindowSec(lockWindowSec as Number) as Void {
+        if (lockWindowSec < buffer180) {
+            lockWindowSec = 2 *buffer180;
+        }
         lockStep1800 = lockWindowSec;
+    }
+    function getLockWindowSec() as Number {
+        return lockStep1800;
     }
 
     function getNormalizedPower() as Number {

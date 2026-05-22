@@ -32,41 +32,76 @@ class WattsAndBeatsApp extends Application.AppBase {
     }
 
     function onSettingsChanged() {
-        var reset = $.getStorageValue("resetDefaults", false);
+        var reset = $.getStorageValue("resetDefaults", null);
         if (reset == null || (reset as Boolean)) {
             $.StorageSetValue("resetDefaults", false);
-            $.StorageSetValue("lock_window_sec", 1800);
+            $.StorageSetValue("lock_interval_sec", 1800);
             $.StorageSetValue("demoMode", false);
             $.StorageSetValue("debugMode", false);
+            $.StorageSetValue("lock_onlapkey", false);
+            $.StorageSetValue("lock_onautolap", false);
+            $.StorageSetValue("beep_onlap", false);
+            $.StorageSetValue("beep_onlock", false);
+            $.StorageSetValue("beep_onEFwarning", false);
+            $.StorageSetValue("beep_onVIwarning", false);
+            $.StorageSetValue("beep_onTQwarning", false);
+            $.StorageSetValue("toast_onEFwarning", false);
+            $.StorageSetValue("toast_onVIwarning", false);
+            $.StorageSetValue("toast_onTQwarning", false);
+            $.StorageSetValue("backlight_onalert", false);
         }
 
-            // TODO
+        // TODO
         $.gDebug = $.getStorageValue("debugMode", false) as Boolean;
-        $.gOnLapKeyLockData = $.getStorageValue("onlapkey_lockdata", false) as Boolean;
+
+        $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
+        $.gLockOnAutoLap =
+            $.getStorageValue("lock_onautolap", false) as Boolean;
+        $.gBeepOnLap = $.getStorageValue("beep_onlap", false) as Boolean;
+        $.gBeepOnLock = $.getStorageValue("beep_onlock", false) as Boolean;
+        $.gBeepOnEFWarning =
+            $.getStorageValue("beep_onEFwarning", false) as Boolean;
+        $.gBeepOnVIWarning =
+            $.getStorageValue("beep_onVIwarning", false) as Boolean;
+        $.gBeepOnTQWarning =
+            $.getStorageValue("beep_onTQwarning", false) as Boolean;
+        $.gToastOnEFWarning =
+            $.getStorageValue("toast_onEFwarning", false) as Boolean;
+        $.gToastOnVIWarning =
+            $.getStorageValue("toast_onVIwarning", false) as Boolean;
+        $.gToastOnTQWarning =
+            $.getStorageValue("toast_onTQwarning", false) as Boolean;
+        $.gBacklightOnAlert =
+            $.getStorageValue("backlight_onalert", false) as Boolean;
+
 
         var trendEngine = getTrendEngine();
-        
-        $.gLockWindowSec =
-            $.getStorageValue("lock_window_sec", $.gLockWindowSec) as Number;
-        
-        trendEngine.setLockWindowSec($.gLockWindowSec);
+
+        $.gLockIntervalSec =
+            $.getStorageValue("lock_interval_sec", $.gLockIntervalSec) as
+            Number;
+        trendEngine.setLockWindowSec($.gLockIntervalSec);
+        var actualIntervalSec = trendEngine.getLockWindowSec();
+        if (actualIntervalSec != $.gLockIntervalSec) {
+            $.gLockIntervalSec = actualIntervalSec;
+            $.StorageSetValue("lock_interval_sec", actualIntervalSec);
+        }
 
         var demo = $.getStorageValue("demoMode", false) as Boolean;
         if (demo != trendEngine.isDemo()) {
             trendEngine.setDemo(demo);
             if (!demo) {
                 // Restore defaults when exiting demo mode
-                trendEngine.setLockWindowSec($.gLockWindowSec);
-                trendEngine.reset();
+                trendEngine.setLockWindowSec($.gLockIntervalSec);
             }
+            trendEngine.reset();
         }
         if (demo) {
             // Demo will run once
             $.StorageSetValue("demoMode", false);
-        }       
+        }
     }
 }
-
 
 function getApp() as WattsAndBeatsApp {
     return Application.getApp() as WattsAndBeatsApp;
@@ -80,5 +115,15 @@ function getTrendEngine() as TrendEngine {
 var gTrendEngine as TrendEngine?;
 
 var gDebug as Boolean = false;
-var gOnLapKeyLockData as Boolean = false;
-var gLockWindowSec as Number = 1800;
+var gLockOnLapKey as Boolean = false;
+var gLockOnAutoLap as Boolean = false;
+var gLockIntervalSec as Number = 1800;
+var gBeepOnLap as Boolean = false;
+var gBeepOnLock as Boolean = false;
+var gBeepOnEFWarning as Boolean = false;
+var gBeepOnVIWarning as Boolean = false;
+var gBeepOnTQWarning as Boolean = false;
+var gToastOnEFWarning as Boolean = false;
+var gToastOnVIWarning as Boolean = false;
+var gToastOnTQWarning as Boolean = false;
+var gBacklightOnAlert as Boolean = false;

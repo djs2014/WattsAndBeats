@@ -1,15 +1,21 @@
 sync field_utils
 
-setting: beep or toast on warning (once, reset until clear)
+check the use of critical/high/warning colors
+
 debug on, show only on big screen extra!
-x get nice icons/png files for ef,vi,tq logos
+update pause screen
+
+settings: warning / show progressbar until warning reached.
+-> max duration EF warning (default 5min is max)
+-> TQ max duration 
+-> VI -> smooth out in kilometers max is 1 km ..
+
 setting: on lap key: lock new baseline (after x sec)
     If a rider cruises through a 20-minute valley flat and then suddenly hits the base of a massive alpine climb, they can press the Lap Key.
 
     Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
 
 show progress bar tiny option on next lock
-set lockwindow - set initial value 1800
 
 
 update readme
@@ -275,3 +281,16 @@ For standard endurance riding, lower torque at the same power is better because 
 
 If your app displays an actual torque value that is 10% higher than the locked 30-minute baseline, it warns the rider to change gears. It means they have dropped their cadence and are creating a "grinding" scenario that will prematurely burn out their legs.
 
+
+
+
+funny
+if (alertState == ALERT_VI) {
+    // Make it pulse using the native clock system time seconds!
+    var seconds = System.getClockTime().sec;
+    if (seconds % 2 == 0) {
+        dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(2);
+        dc.drawRoundedRectangle((col2X - 32).toNumber(), (actualsY - 22).toNumber(), 64, 44, 6);
+    }
+}
