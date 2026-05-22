@@ -122,6 +122,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         processTrendEngineWarnings();
     }
 
+    // TODO
     function onTimerLap2(trigger as DataField.LapInfoType) as Lang.Boolean {
         System.println(["Lap triggered: ", trigger]);
         if (trigger == DataField.LAP_TRIGGER_MANUAL) {
@@ -144,6 +145,12 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
     function onTimerLap() as Void {
         System.println("Lap event triggered");
+        if ($.gInitialEFOnLap) {
+            var locked = mTrendEngine.lockInitialEF();
+            if (locked) {
+                System.println("Initial locked on lap");
+            }
+        }
         if ($.gLockOnAutoLap) {
             if ($.gBeepOnLap) {
                 alertOnEvent(Attention.TONE_LAP);
@@ -288,13 +295,18 @@ class WattsAndBeatsView extends WatchUi.DataField {
             $.gExitedMenu = false;
         }
 
-        var backgroundColor = getBackgroundColorOrWarningColor();
+        var backgroundColor;
+        if ($.gBackgroundOnAlert) {
+            backgroundColor = getBackgroundColorOrWarningColor();
+        } else {
+            backgroundColor = getBackgroundColor();
+        }
         dc.setColor(backgroundColor, backgroundColor);
         dc.clear();
         mDarkBackground = backgroundColor == Graphics.COLOR_BLACK;
 
         if (mTrendEngine.isDemo()) {
-            $.drawDemoBackground(
+            drawDemoBackground(
                 dc,
                 dc.getWidth(),
                 dc.getHeight(),
@@ -307,13 +319,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return;
         }
 
-        if (
-            mActivityStarted &&
-            mPaused &&
-            mFirstBlockEF > 0 &&
-            mLatestBlockEF > 0
-        ) {
-            // Only show when valid data
+        if (mPaused && mActivityStarted) {
             drawPausedState(dc);
             return;
         }
@@ -329,143 +335,172 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
     }
 
-    // TODO sublabel explaining the EF/VI/TQ
-    // Display Avg, intepretation drop etc, MAX
     function drawPausedState(dc as Dc) as Void {
         var color = getThemeColor(mDarkBackground);
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
         var width = dc.getWidth();
         var height = dc.getHeight();
 
-        var centerX = width / 2;
-        var startY = (height * 0.15).toNumber();
-        var spacing = (height * 0.22).toNumber();
+        // dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+        // dc.clear();
 
-        var textHeader = "RIDE SUMMARY (PAUSED)";
-        var textEF = "DECOUPLING (EF):";
-        var textVI = "PACING (VI):";
-        var textTorque = "AVG TORQUE:";
-        if (mEf == EfSmall) {
-            textHeader = "SUMMARY";
-            textEF = "EF";
-            textVI = "VI";
-            textTorque = "TQ";
+        // 1. Scalable Column X Anchors
+        var colLabel = (width * 0.06).toNumber();
+        var colAvg = (width * 0.32).toNumber();
+        var colPeak = (width * 0.54).toNumber();
+        var colDesc = (width * 0.64).toNumber(); // Left anchor for coaching string
+
+        // 2. Scalable Vertical Rows
+        var titleY = (height * 0.08).toNumber();
+        var subHeaderY = (height * 0.22).toNumber();
+        var startY = (height * 0.36).toNumber();
+        var rowSpacing = (height * 0.18).toNumber();
+
+        // Tweaks per field size
+        var isSmallScreen = mEf == EfSmall;
+        var showTitle = mEf == EfLarge || mEf == EfOne;
+        var showAvgColumn = mEf != EfSmall;
+        var shiftDescColumn = mEf == EfWide || mEf == EfLarge || mEf == EfOne;
+        if (shiftDescColumn) {
+            // Shift to left, more room for text on larger screens
+            colDesc = (width * 0.6).toNumber();
         }
 
-        var textPaused = "PAUSED";
-        // Pause indicator in the center
-        var font = Graphics.FONT_SYSTEM_LARGE;
-        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
-        dc.drawText(
-            dc.getWidth() / 2,
-            dc.getHeight() / 2,
-            font,
-            textPaused,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
-        );
+        var fXTiny = Graphics.FONT_XTINY;
+        var fSmall = Graphics.FONT_SMALL;
+        var jLeft = Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER;
+        var jRight =
+            Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER;
 
-        // Header
+        // --- TITLE ---
+        if (showTitle) {
+            dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+            dc.drawText(
+                width / 2,
+                titleY,
+                fSmall,
+                "RIDE SUMMARY (PAUSED)",
+                Graphics.TEXT_JUSTIFY_CENTER
+            );
+        }
+
+        // --- SUB-HEADERS ---
         dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
-        var fontHeader = Graphics.FONT_SMALL;
-        dc.drawText(
-            centerX,
-            startY,
-            fontHeader,
-            textHeader,
-            Graphics.TEXT_JUSTIFY_CENTER
-        );
-
-        // Subtle divider line
-        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(2);
-        dc.drawLine(width * 0.1, startY + 25, width * 0.9, startY + 25);
-
-        var fontText = Graphics.FONT_SMALL;
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
-
-        // STAT 1: Cardiorespiratory Decoupling
-        var decouplingText = "---";
-        if (mFirstBlockEF > 0 && mLatestBlockEF > 0) {
-            // Formula: ((Latest - First) / First) * 100
-            var pctDrop =
-                ((mLatestBlockEF - mFirstBlockEF) / mFirstBlockEF) * 100.0;
-
-            // Set color based on how severe the decoupling is
-            if (pctDrop < -10.0) {
-                dc.setColor(color[:warning], Graphics.COLOR_TRANSPARENT);
-            } else {
-                dc.setColor(color[:good], Graphics.COLOR_TRANSPARENT);
-            }
-
-            decouplingText = pctDrop.format("%.1f") + "%";
+        if (showAvgColumn) {
+            dc.drawText(colAvg, subHeaderY, fXTiny, "AVG", jRight);
         }
-        dc.drawText(
-            width * 0.15,
-            startY + spacing,
-            fontText,
-            textEF, // Cardio decoupling
-            Graphics.TEXT_JUSTIFY_LEFT
-        );
-        dc.drawText(
-            width * 0.85,
-            startY + spacing,
-            fontText,
-            decouplingText,
-            Graphics.TEXT_JUSTIFY_RIGHT
+        dc.drawText(colPeak, subHeaderY, fXTiny, "MAX", jRight);
+        dc.drawText(colDesc, subHeaderY, fXTiny, "STATUS", jLeft);
+
+        // Divider Rule
+        dc.setColor(color[:faded], Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(1);
+        dc.drawLine(
+            width * 0.04,
+            subHeaderY + 12,
+            width * 0.96,
+            subHeaderY + 12
         );
 
-        // STAT 2: Global Session VI (Pacing)
-        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
-        var globalVI = 1.0;
+        // Calculate dynamic session metrics
+        var currentSessionVI = 1.0;
         if (mAveragePower > 0) {
             var globalNP = mTrendEngine.getNormalizedPower();
-            globalVI = globalNP / mAveragePower;
-
-            System.println([
-                "Avg cadence:",
-                mAverageCadence,
-                "Avg power:",
-                mAveragePower,
-                "Global NP:",
-                globalNP,
-            ]);
+            System.println("Global NP: " + globalNP.format("%.2f") + " W");
+            currentSessionVI = globalNP / mAveragePower;
         }
-        dc.drawText(
-            width * 0.15,
-            startY + spacing * 2,
-            fontText,
-            textVI, // Global pacing
-            Graphics.TEXT_JUSTIFY_LEFT
-        );
-        dc.drawText(
-            width * 0.85,
-            startY + spacing * 2,
-            fontText,
-            globalVI.format("%.2f"),
-            Graphics.TEXT_JUSTIFY_RIGHT
-        ); // Example or computed value
-        // TODO explain value and color code based on thresholds (e.g., >1.05 is bad pacing, <1.02 is good pacing)
 
-        // STAT 3: Average Torque
-        var avgTorqueText = "---";
+        var actualEF = mCycloData.ActualEF;
+        var globalInitialEF = mTrendEngine.getGlobalInitialEF();
+        var maxValues = mTrendEngine.getMaxValues();
+        //var maxRollingEF = maxValues[0];
+        var maxRollingVI = maxValues[1];
+        var maxInstantTorque = maxValues[2];
+
+        // Evaluate statuses
+        var efStatus = evaluateEFDecoupling(
+            globalInitialEF,
+            actualEF,
+            isSmallScreen
+        );
+        var viStatus = evaluateVIPacing(currentSessionVI, isSmallScreen);
+
+        var averageTorqueAccumulator = 0;
         if (mAverageCadence > 0) {
-            var sessionAvgTorque = mAveragePower / (mAverageCadence * 0.10472);
-            avgTorqueText = sessionAvgTorque.format("%.1f") + " Nm";
+            averageTorqueAccumulator =
+                mAveragePower / (mAverageCadence * 0.10472);
+        }
+
+        var tqStatus = evaluateTorqueStrain(
+            averageTorqueAccumulator,
+            maxInstantTorque,
+            isSmallScreen
+        );
+
+        // ========================================================
+        // ROW 1: EF
+        // ========================================================
+        var y = startY;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colLabel, y, fSmall, "EF", jLeft);
+        if (showAvgColumn) {
+            dc.drawText(
+                colAvg,
+                y,
+                fSmall,
+                globalInitialEF.format("%.2f"),
+                jRight
+            ); // Historical anchor baseline
+        }
+        dc.drawText(colPeak, y, fSmall, actualEF.format("%.2f"), jRight); // Current performance point
+
+        dc.setColor(efStatus[:color], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colDesc, y, fXTiny, efStatus[:text], jLeft);
+
+        // ========================================================
+        // ROW 2: VI
+        // ========================================================
+        y += rowSpacing;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colLabel, y, fSmall, "VI", jLeft);
+        if (showAvgColumn) {
+            dc.drawText(
+                colAvg,
+                y,
+                fSmall,
+                currentSessionVI.format("%.2f"),
+                jRight
+            );
+        }
+        dc.drawText(colPeak, y, fSmall, maxRollingVI.format("%.2f"), jRight);
+
+        dc.setColor(viStatus[:color], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colDesc, y, fXTiny, viStatus[:text], jLeft);
+
+        // ========================================================
+        // ROW 3: TORQUE
+        // ========================================================
+        y += rowSpacing;
+        dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colLabel, y, fSmall, "TQ", jLeft);
+        if (showAvgColumn) {
+            dc.drawText(
+                colAvg,
+                y,
+                fSmall,
+                averageTorqueAccumulator.format("%.0f"),
+                jRight
+            );
         }
         dc.drawText(
-            width * 0.15,
-            startY + spacing * 3,
-            fontText,
-            textTorque,
-            Graphics.TEXT_JUSTIFY_LEFT
+            colPeak,
+            y,
+            fSmall,
+            maxInstantTorque.format("%.0f"),
+            jRight
         );
-        dc.drawText(
-            width * 0.85,
-            startY + spacing * 3,
-            fontText,
-            avgTorqueText,
-            Graphics.TEXT_JUSTIFY_RIGHT
-        );
+
+        dc.setColor(tqStatus[:color], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(colDesc, y, fXTiny, tqStatus[:text], jLeft);
     }
 
     function getBackgroundColorOrWarningColor() as ColorType {
@@ -561,7 +596,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // Highlight box when any of the metrics is in warning state
         var warningPillx = (width * 0.05).toNumber();
-        var warningPillWidth = (width * 0.90).toNumber();
+        var warningPillWidth = (width * 0.9).toNumber();
         var warningPillHeight = (rowHeight * 1.05).toNumber();
         var warningPillYoffset = (rowHeight * 0.7).toNumber();
 
@@ -601,6 +636,16 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var trendVI = mCycloData.TrendVI;
         var trendTQ = mCycloData.TrendTQ;
 
+        var criticalTextColor = $.gTextWhiteOnRed
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
+        var highTextColor = $.gTextWhiteOnOrange
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
+        var warningTextColor = $.gTextWhiteOnYellow
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
+
         // --- ROW 1: EF ---
         var yEF = startY + rowHeight;
         var efString = actualEF.format("%.2f");
@@ -615,7 +660,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 warningPillWidth,
                 warningPillHeight
             );
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(criticalTextColor, Graphics.COLOR_TRANSPARENT);
         } else {
             dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
         }
@@ -646,7 +691,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendEF,
             color[:good],
-            Graphics.COLOR_WHITE,
+            criticalTextColor,
             color[:neutral]
         );
         var drawUpTriangleForBad = false; // EF dropping is bad, so trend arrow points down for bad trend
@@ -673,7 +718,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 warningPillWidth,
                 warningPillHeight
             );
-            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(warningTextColor, Graphics.COLOR_TRANSPARENT);
         } else {
             dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
         }
@@ -704,7 +749,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendVI,
             color[:good],
-            Graphics.COLOR_BLACK,
+            warningTextColor,
             color[:neutral]
         );
         drawUpTriangleForBad = true; // VI spiking is bad, so trend arrow points up for bad trend
@@ -731,7 +776,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 warningPillWidth,
                 warningPillHeight
             );
-            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(highTextColor, Graphics.COLOR_TRANSPARENT);
         } else {
             dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
         }
@@ -762,7 +807,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendTQ,
             color[:good],
-            Graphics.COLOR_BLACK,
+            highTextColor,
             color[:neutral]
         );
         drawUpTriangleForBad = true; // Torque spiking is bad, so trend arrow points up for bad trend
@@ -801,6 +846,16 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var warningPillHeight =
             height - barHeight - (warningPillY * 2).toNumber();
         // var warningPillY = (height * 0.3).toNumber();
+
+        var criticalTextColor = $.gTextWhiteOnRed
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
+        var highTextColor = $.gTextWhiteOnOrange
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
+        var warningTextColor = $.gTextWhiteOnYellow
+            ? Graphics.COLOR_WHITE
+            : Graphics.COLOR_BLACK;
 
         // --- STEP 1: DRAW HEADERS (Labels + icons) ---
         var textEF = "EF";
@@ -861,7 +916,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var heartColor = getTrendDisplayColor(
             trendEF,
             color[:faded],
-            Graphics.COLOR_WHITE,
+            criticalTextColor,
             color[:faded]
         );
         drawHeartIcon(dc, col1X - fontHeight, iconY, fontHeight, heartColor);
@@ -869,7 +924,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var targetColor = getTrendDisplayColor(
             trendVI,
             color[:faded],
-            Graphics.COLOR_BLACK,
+            warningTextColor,
             color[:faded]
         );
         var targetColorInner = color[:background];
@@ -889,7 +944,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var torqueColor = getTrendDisplayColor(
             trendTQ,
             color[:faded],
-            Graphics.COLOR_BLACK,
+            highTextColor,
             color[:faded]
         );
         var torqueOffsetY = (fontHeight * 0.4).toNumber();
@@ -912,9 +967,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
         );
 
         // Header text
-        var colorTextEF = EFwarning ? Graphics.COLOR_WHITE : color[:text];
-        var colorTextVI = VIwarning ? Graphics.COLOR_BLACK : color[:text];
-        var colorTextTQ = TQwarning ? Graphics.COLOR_BLACK : color[:text];
+        var colorTextEF = EFwarning ? criticalTextColor : color[:text];
+        var colorTextVI = VIwarning ? warningTextColor : color[:text];
+        var colorTextTQ = TQwarning ? highTextColor : color[:text];
 
         dc.setColor(colorTextEF, Graphics.COLOR_TRANSPARENT);
         dc.drawText(col1X, yCenter, headerFont, textEF, alignHeaderText);
@@ -980,7 +1035,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendEF,
             color[:good],
-            Graphics.COLOR_WHITE,
+            criticalTextColor,
             color[:neutral]
         );
         var drawUpTriangleForBad = false; // EF dropping is bad, so trend arrow points down for bad trend
@@ -999,7 +1054,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendVI,
             color[:good],
-            Graphics.COLOR_BLACK,
+            warningTextColor,
             color[:neutral]
         );
         drawUpTriangleForBad = true;
@@ -1018,10 +1073,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendTQ,
             color[:good],
-            Graphics.COLOR_BLACK,
+            highTextColor,
             color[:neutral]
         );
-        drawUpTriangleForBad = false; // Torque dropping is bad, so trend arrow points down for bad trend
+        drawUpTriangleForBad = true;
         dc.drawText(
             col3X,
             baselinesY,
@@ -1127,7 +1182,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 : Graphics.COLOR_BLACK,
             :good => darkBackground
                 ? Graphics.COLOR_GREEN
-                : Graphics.COLOR_GREEN,
+                : Graphics.COLOR_DK_GREEN,
             :critial => mColorCritical,
             :high => mColorHigh,
             :warning => mColorWarning,
@@ -1302,13 +1357,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // Use DARK_GRAY for a beautiful, subtle watermark on a black screen
         dc.setColor(color, Graphics.COLOR_TRANSPARENT);
-        // dc.drawRoundedRectangle(
-        //     bodyX,
-        //     bodyY,
-        //     bodyWidth,
-        //     bodyHeight,
-        //     cornerRadius
-        // );
         drawPedalWithInsetFill(
             dc,
             bodyX,
@@ -1371,71 +1419,144 @@ class WattsAndBeatsView extends WatchUi.DataField {
         );
     }
 
-    function drawScalablePedal(dc, cx, cy, size, isLeftPedal) {
-        // Set line thickness proportional to the size of the pedal
-        var penWidth = (size * 0.06).toNumber();
-        if (penWidth < 1) {
-            penWidth = 1;
+    // Returns an interpretation object for EF (Aerobic Efficiency)
+    // For smaller screen max 8 characters
+    function evaluateEFDecoupling(avgEF, currentEF, isSmallScreen as Boolean) {
+        var color = getThemeColor(mDarkBackground);
+        if (avgEF == null || currentEF == null || avgEF == 0) {
+            return {
+                :text => isSmallScreen ? "Calc..." : "Calculating...",
+                :color => color[:faded],
+            };
         }
-        dc.setPenWidth(penWidth);
 
-        // 1. Calculate dimensions relative to our master size variable
-        var axleLength = (size * 0.35).toNumber();
-        var axleWidth = (size * 0.12).toNumber();
-        var bodyWidth = (size * 0.65).toNumber();
-        var bodyHeight = (size * 0.85).toNumber();
-        var cornerRadius = (size * 0.15).toNumber();
+        // Decoupling = (Initial/Average EF vs Current Moving EF)
+        // A drop in EF means higher heart rate for the same power output
+        var drift = ((currentEF - avgEF) / avgEF) * 100.0;
+        if (drift < -10.0) {
+            return {
+                :text => isSmallScreen
+                    ? drift.format("%.0f") + "% Dcop"
+                    : "Decoupling (" + drift.format("%.1f") + "%)",
+                :color => color[:critical],
+            };
+        } else if (drift < -5.0) {
+            return {
+                :text => isSmallScreen
+                    ? drift.format("%.0f") + "% Drft"
+                    : "Mild Drift (" + drift.format("%.1f") + "%)",
+                :color => color[:warning],
+            };
+        }
+        return {
+            :text => isSmallScreen ? "Stable" : "Aerobic Stable",
+            :color => color[:good],
+        };
+    }
 
-        // 2. Adjust orientation based on whether it's the left or right pedal
-        var direction = isLeftPedal ? -1 : 1;
+    // Returns an interpretation object for VI (Pacing Variability)
+    function evaluateVIPacing(sessionVI, isSmallScreen as Boolean) {
+        var color = getThemeColor(mDarkBackground);
+        if (sessionVI == null || sessionVI == 0) {
+            return {
+                :text => "No Data",
+                :color => color[:faded],
+            };
+        }
 
-        // 3. Draw the Axle Spindle (Connecting the crank pivot to the pedal body)
-        var axleX = isLeftPedal ? cx - axleLength : cx;
-        var axleY = cy - axleWidth / 2;
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.fillRectangle(axleX, axleY, axleLength, axleWidth);
+        if (sessionVI > 1.08) {
+            return {
+                :text => isSmallScreen ? "Surged" : "Poor Pacing (Surged)",
+                :color => color[:critical],
+            };
+        } else if (sessionVI > 1.04) {
+            return {
+                :text => isSmallScreen ? "Spiky" : "Stochastic Ride",
+                :color => color[:warning],
+            };
+        }
+        return {
+            :text => isSmallScreen ? "Steady" : "Steady Pacing",
+            :color => color[:good],
+        };
+    }
 
-        // 4. Draw the Spindle Cap/Pivot point at the crank arm
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(cx, cy, (axleWidth * 1.2).toNumber());
+    // Returns an interpretation object for Torque
+    function evaluateTorqueStrain(
+        avgTorque,
+        maxTorque,
+        isSmallScreen as Boolean
+    ) {
+        var color = getThemeColor(mDarkBackground);
+        if (
+            avgTorque == null ||
+            maxTorque == null ||
+            maxTorque == 0 ||
+            avgTorque == 0
+        ) {
+            return {
+                :text => "No Data",
+                :color => color[:faded],
+            };
+        }
 
-        // 5. Draw the Main Pedal Body Frame
-        var bodyX = isLeftPedal ? cx - axleLength - bodyWidth : cx + axleLength;
-        var bodyY = cy - bodyHeight / 2;
+        var ratio = maxTorque / avgTorque;
 
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawRoundedRectangle(
-            bodyX,
-            bodyY,
-            bodyWidth,
-            bodyHeight,
-            cornerRadius
-        );
+        if (ratio > 4.0) {
+            // High Neuromuscular Strain
+            return {
+                :text => isSmallScreen ? "Strain" : "High N-M Strain",
+                :color => color[:critical],
+            };
+        } else if (ratio > 2.5) {
+            return {
+                // Heavy Neuromuscular Strain
+                :text => isSmallScreen ? "Heavy" : "Heavy N-M Strain",
+                :color => color[:high],
+            };
+        }
+        return {
+            :text => isSmallScreen ? "Smooth" : "Smooth Delivery",
+            :color => color[:good],
+        };
+    }
 
-        // 6. Draw Internal Grip Cutouts (The pedal "window" details)
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        var windowWidth = (bodyWidth * 0.7).toNumber();
-        var windowHeight = (bodyHeight * 0.3).toNumber();
-        var windowX = bodyX + (bodyWidth - windowWidth) / 2;
+    function drawDemoBackground(
+        dc as Dc,
+        width as Number,
+        height as Number,
+        demoDuration as Number,
+        elapsedSeconds as Number
+    ) as Void {
+        var color = getThemeColor(mDarkBackground);
+        // 1. Calculate how many seconds are left in our 6-minute (360s) test loop
+        var secondsLeft = demoDuration - elapsedSeconds;
+        if (secondsLeft < 0) {
+            secondsLeft = 0;
+        }
 
-        // Upper window cutout
-        var windowY1 = bodyY + (bodyHeight * 0.15).toNumber();
-        dc.drawRoundedRectangle(
-            windowX,
-            windowY1,
-            windowWidth,
-            windowHeight,
-            (cornerRadius * 0.5).toNumber()
-        );
+        var centerX = (width / 2).toNumber();
+        var phase = mTestGenerator.getCurrentPhase(elapsedSeconds);
 
-        // Lower window cutout
-        var windowY2 = bodyY + (bodyHeight * 0.55).toNumber();
-        dc.drawRoundedRectangle(
-            windowX,
-            windowY2,
-            windowWidth,
-            windowHeight,
-            (cornerRadius * 0.5).toNumber()
+        dc.setColor(color[:strong], Graphics.COLOR_TRANSPARENT);
+
+        // Format seconds left into MM:SS
+        var minutes = (secondsLeft / 60).toNumber();
+        var seconds = secondsLeft % 60;
+        var countdownStr =
+            "DEMO - " +
+            phase +
+            " | " +
+            minutes.format("%d") +
+            ":" +
+            seconds.format("%02d");
+
+        dc.drawText(
+            centerX,
+            (height * 0.02).toNumber(),
+            Graphics.FONT_XTINY,
+            countdownStr,
+            Graphics.TEXT_JUSTIFY_CENTER
         );
     }
 }

@@ -58,12 +58,9 @@ class DataFieldSettingsDelegate extends WatchUi.BehaviorDelegate {
     mi = new WatchUi.MenuItem("Lock data", null, "lock_data", null);
     menu.addItem(mi);
 
-    // mi = new WatchUi.MenuItem("Large field", null, "large_field", null);
-    // menu.addItem(mi);
-    // mi = new WatchUi.MenuItem("Wide field", null, "wide_field", null);
-    // menu.addItem(mi);
-    // mi = new WatchUi.MenuItem("Small field", null, "small_field", null);
-    // menu.addItem(mi);
+    mi = new WatchUi.MenuItem("Colors", null, "colors", null);
+    menu.addItem(mi);
+    
     
     var boolean = false;
 

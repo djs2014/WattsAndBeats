@@ -62,6 +62,20 @@ public class TrendEngineGenerator {
         //        System.println("Generated Data: Cadence=" + data[0] + " RPM, Power=" + data[1] + " W, Heart Rate=" + data[2] + " bpm");
         return [currentCadence, currentPower, currentHeartRate];
     }
+    function getCurrentPhase(elapsedSeconds as Number) as String {
+        var t = elapsedSeconds;
+        if (t <= 15) {
+            return "Init";
+        } else if (t > 15 && t <= 180) {
+            return "Baseline";
+        } else if (t > 180 && t <= 240) {
+            return "VI Warning";
+        } else if (t > 240 && t <= 300) {
+            return "TQ Warning";
+        } else {
+            return "EF Warning";
+        }
+    }
 
     hidden var mNTicks as Number = 0;
     hidden var mAverageCadence as Double = 0.0d;

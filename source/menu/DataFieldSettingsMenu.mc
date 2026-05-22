@@ -32,8 +32,9 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
     if (id instanceof String && id.equals("lock_data")) {
       var lockMenu = new WatchUi.Menu2({ :title => "Lock data setings" });
 
-      var mi = new WatchUi.MenuItem(
-        "Lock interval sec|180-",
+      var mi;
+      mi = new WatchUi.MenuItem(
+        "Lock interval sec|180~",
         null,
         "lock_interval_sec",
         null
@@ -41,18 +42,49 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
       lockMenu.addItem(mi);
 
+      mi = new WatchUi.MenuItem(
+        "Smoothing window|5~60 (sec)",
+        null,
+        "smoothing_window_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      lockMenu.addItem(mi);
+
+      mi = new WatchUi.MenuItem(
+        "Initial EF at sec|180~",
+        null,
+        "initial_ef_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      lockMenu.addItem(mi);
+
       var boolean;
-      boolean = $.getStorageValue("lock_onlapkey", false) as Boolean;
+      boolean = $.getStorageValue("initial_ef_on_lap", true) as Boolean;
       lockMenu.addItem(
         new WatchUi.ToggleMenuItem(
-          "Lock on lap key",
+          "Initial EF on 1st lap",
           null,
-          "lock_onlapkey",
+          "initial_ef_on_lap",
           boolean,
           null
         )
       );
-      boolean = $.getStorageValue("lock_onautolap", false) as Boolean;
+
+      var boolean;
+      // ?? doesn't work on edge 1050?
+      // boolean = $.getStorageValue("lock_onlapkey", false) as Boolean;
+      // lockMenu.addItem(
+      //   new WatchUi.ToggleMenuItem(
+      //     "Lock on lap key",
+      //     null,
+      //     "lock_onlapkey",
+      //     boolean,
+      //     null
+      //   )
+      // );
+      boolean = $.getStorageValue("lock_onautolap", true) as Boolean;
       lockMenu.addItem(
         new WatchUi.ToggleMenuItem(
           "Lock on auto lap",
@@ -71,15 +103,57 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       return;
     }
 
+    if (id instanceof String && id.equals("colors")) {
+      var colorsMenu = new WatchUi.Menu2({ :title => "Colors" });
+      var boolean;
+
+      boolean = $.getStorageValue("text_whiteonred", true) as Boolean;
+      colorsMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Text White on Red",
+          null,
+          "text_whiteonred",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("text_whiteonorange", true) as Boolean;
+      colorsMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Text White on Orange",
+          null,
+          "text_whiteonorange",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("text_whiteonyellow", true) as Boolean;
+      colorsMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Text White on Yellow",
+          null,
+          "text_whiteonyellow",
+          boolean,
+          null
+        )
+      );
+
+      WatchUi.pushView(
+        colorsMenu,
+        new $.GeneralMenuDelegate(self, colorsMenu),
+        WatchUi.SLIDE_UP
+      );
+      return;
+    }
     if (id instanceof String && id.equals("alerts")) {
       var alertMenu = new WatchUi.Menu2({ :title => "Alerts" });
 
       var boolean;
 
-      boolean = Storage.getValue("backlight_onalert") ? false : false;
+      boolean = $.getStorageValue("backlight_onalert", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
-          "Backlight on alert",
+          "Backlight on",
           null,
           "backlight_onalert",
           boolean,
@@ -87,8 +161,19 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
         )
       );
 
+      boolean = $.getStorageValue("background_onalert", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "Change background",
+          null,
+          "background_onalert",
+          boolean,
+          null
+        )
+      );
+
       // When pressed the lap key
-      boolean = Storage.getValue("beep_onlap") ? false : false;
+      boolean = $.getStorageValue("beep_onlap", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
           "On lap (beep)",
@@ -170,12 +255,6 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
-
-      // on ef warning beep_onEFwarning
-      // on vi warning beep_onVIwarning
-      // on torque warning beep_onTQwarning
-
-      // toast options warnings
 
       WatchUi.pushView(
         alertMenu,

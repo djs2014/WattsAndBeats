@@ -1,9 +1,20 @@
 sync field_utils
 
-check the use of critical/high/warning colors
+alarm werkt?
+xchange backgr on alert
+xoption  white/black text red / yellow /orange alert
 
-update pause screen
+EF warning klopt het?
+font groter bij pauze op groter veld?
+
+xaantal sec eerste lock - default 180 sec
+xon lap eerste keer set eerste lock
+xon lap manual hide -> werkt niet
+
+
+xcheck the use of critical/high/warning colors
 debug on, show only on big screen extra!
+todo show demo phase
 
 settings: warning / show progressbar until warning reached.
 -> max duration EF warning (default 5min is max)
@@ -38,16 +49,15 @@ VI:
 Track Global Session VI (to show overall pacing discipline) and highlight Max Power instead.
 
 
-===================================
-     RIDE PAUSED - SUMMARY
-===================================
- [ METRIC ]    [ AVG ]     [ PEAK ]
------------------------------------
-    EF          1.45        1.72  <-- Peak 3-Min Block
-    VI          1.04        1.24  <-- Max 3-Min Rolling Surge
-    TQ          18.2 Nm     84.5  <-- Absolute Max Smash
-===================================
-+ the data in current pause screen
+[ RIDE SUMMARY (PAUSED) ]
+  -------------------------------------------------------------
+  METRIC    |   AVG    |   PEAK   |  INTERPRETATION
+  -------------------------------------------------------------
+  EF        |   1.48   |   1.22   |  🔴 Decoupling detected (-17.5%)
+  VI        |   1.03   |   1.18   |  🟢 Excellent Global Pacing
+  TQ        |  24.2 Nm |  68.1 Nm |  🟡 High Peak Muscle Strain
+
+
 
 ---
 // 1. Capture the absolute max torque smash of the ride

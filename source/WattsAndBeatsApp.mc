@@ -36,10 +36,14 @@ class WattsAndBeatsApp extends Application.AppBase {
         if (reset == null || (reset as Boolean)) {
             $.StorageSetValue("resetDefaults", false);
             $.StorageSetValue("lock_interval_sec", 1800);
+            $.StorageSetValue("smoothing_window_sec", 30);
+            $.StorageSetValue("initial_ef_sec", 900);
+            $.StorageSetValue("initial_ef_on_lap", false);
+
             $.StorageSetValue("demoMode", false);
             $.StorageSetValue("debugMode", false);
             $.StorageSetValue("lock_onlapkey", false);
-            $.StorageSetValue("lock_onautolap", false);
+            $.StorageSetValue("lock_onautolap", true);
             $.StorageSetValue("beep_onlap", false);
             $.StorageSetValue("beep_onlock", false);
             $.StorageSetValue("beep_onEFwarning", false);
@@ -49,14 +53,17 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.StorageSetValue("toast_onVIwarning", false);
             $.StorageSetValue("toast_onTQwarning", false);
             $.StorageSetValue("backlight_onalert", false);
+            $.StorageSetValue("background_onalert", false);
+            $.StorageSetValue("text_whiteonred", true);
+            $.StorageSetValue("text_whiteonorange", true);
+            $.StorageSetValue("text_whiteonyellow", true);
         }
 
         // TODO
         $.gDebug = $.getStorageValue("debugMode", false) as Boolean;
 
-        $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
-        $.gLockOnAutoLap =
-            $.getStorageValue("lock_onautolap", false) as Boolean;
+        // TODO $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
+        $.gLockOnAutoLap = $.getStorageValue("lock_onautolap", true) as Boolean;
         $.gBeepOnLap = $.getStorageValue("beep_onlap", false) as Boolean;
         $.gBeepOnLock = $.getStorageValue("beep_onlock", false) as Boolean;
         $.gBeepOnEFWarning =
@@ -73,7 +80,14 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.getStorageValue("toast_onTQwarning", false) as Boolean;
         $.gBacklightOnAlert =
             $.getStorageValue("backlight_onalert", false) as Boolean;
-
+        $.gBackgroundOnAlert =
+            $.getStorageValue("background_onalert", false) as Boolean;
+        $.gTextWhiteOnRed =
+            $.getStorageValue("text_whiteonred", true) as Boolean;
+        $.gTextWhiteOnOrange =
+            $.getStorageValue("text_whiteonorange", true) as Boolean;
+        $.gTextWhiteOnYellow =
+            $.getStorageValue("text_whiteonyellow", true) as Boolean;
 
         var trendEngine = getTrendEngine();
 
@@ -86,6 +100,20 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.gLockIntervalSec = actualIntervalSec;
             $.StorageSetValue("lock_interval_sec", actualIntervalSec);
         }
+
+        var smoothingWindowSec =
+            $.getStorageValue("smoothing_window_sec", 30) as Number;
+        trendEngine.setSmoothingWindowSec(smoothingWindowSec);
+        var actualSmoothingWindowSec = trendEngine.getSmoothingWindowSec();
+        if (actualSmoothingWindowSec != smoothingWindowSec) {
+            $.StorageSetValue("smoothing_window_sec", actualSmoothingWindowSec);
+        }
+
+        var initialEFSec = $.getStorageValue("initial_ef_sec", 900) as Number;
+        trendEngine.setInitialEFSec(initialEFSec);
+
+        $.gInitialEFOnLap =
+            $.getStorageValue("initial_ef_on_lap", false) as Boolean;
 
         var demo = $.getStorageValue("demoMode", false) as Boolean;
         if (demo != trendEngine.isDemo()) {
@@ -116,8 +144,10 @@ var gTrendEngine as TrendEngine?;
 
 var gDebug as Boolean = false;
 var gLockOnLapKey as Boolean = false;
-var gLockOnAutoLap as Boolean = false;
+var gLockOnAutoLap as Boolean = true;
 var gLockIntervalSec as Number = 1800;
+var gInitialEFOnLap as Boolean = false;
+
 var gBeepOnLap as Boolean = false;
 var gBeepOnLock as Boolean = false;
 var gBeepOnEFWarning as Boolean = false;
@@ -127,3 +157,7 @@ var gToastOnEFWarning as Boolean = false;
 var gToastOnVIWarning as Boolean = false;
 var gToastOnTQWarning as Boolean = false;
 var gBacklightOnAlert as Boolean = false;
+var gBackgroundOnAlert as Boolean = false;
+var gTextWhiteOnRed as Boolean = true;
+var gTextWhiteOnOrange as Boolean = true;
+var gTextWhiteOnYellow as Boolean = true;
