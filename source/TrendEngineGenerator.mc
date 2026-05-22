@@ -4,7 +4,7 @@ import Toybox.System;
 
 public class TrendEngineGenerator {
     function initialize() {
-        System.println("Trend Engine Generator Initialized");
+        System.println("Trend Engine Generator Initialized - 30 seconds smoothing window, 3-minute lock step");
     }
 
     function getFakeData(elapsedSeconds as Number) as Array<Number> {
@@ -30,13 +30,24 @@ public class TrendEngineGenerator {
         }
 
         // SCENARIO 2: Test VI Warning (181s - 240s)
-        // We wildly alternate power between 100W and 380W every few seconds
-        // to spike the rolling Normalized Power, while keeping HR flat.
-        else if (t > 180 && t <= 240) {
+        // By holding a massive 420W for 35 straight seconds, the 30-second rolling buffer 
+        // completely fills up with high power, driving your Normalized Power up. 
+        // Then, when you instantly drop to a tiny 80W for the remainder of the block, 
+        // the Average Power drops like a stone while the mathematical memory of that 420W 
+        // attack lingers in the formula.
+        else if (t > 180 && t <= 240) {            
             System.println("VI Warning Phase - " + info);
             currentCadence = 90;
-            currentPower = t % 10 < 5 ? 100 : 380;
             currentHeartRate = 142;
+
+            // Simulate a brutal, sustained attack to blow up the 30s VI buffer
+            if (t <= 215) {
+                // First 35 seconds: Attack at a massive, steady wattage
+                currentPower = 420;
+            } else {
+                // Last 25 seconds: Absolute collapse down to recovery
+                currentPower = 80;
+            }
         }
 
         // SCENARIO 3: Test Torque Warning (241s - 300s)
@@ -83,12 +94,14 @@ public class TrendEngineGenerator {
     hidden var mAverageHeartRate as Double = 0.0d;
     function getAverages(elapsedSeconds as Number) as Array<Double> {
         if (elapsedSeconds <= 1) {
-            System.println("Resetting averages at start - " + elapsedSeconds.format("%02d"));
+            System.println(
+                "Resetting averages at start - " + elapsedSeconds.format("%02d")
+            );
             // reset
             mNTicks = 0;
             mAverageCadence = 0.0d;
             mAveragePower = 0.0d;
-            mAverageHeartRate = 0.0d;            
+            mAverageHeartRate = 0.0d;
         }
         var data = getFakeData(elapsedSeconds);
 
@@ -101,7 +114,15 @@ public class TrendEngineGenerator {
             mNTicks
         );
         System.println(
-            "Averages after " + mNTicks.format("%d") + " ticks: Cadence=" + mAverageCadence.format("%.2f") + " RPM, Power=" + mAveragePower.format("%.2f") + " W, Heart Rate=" + mAverageHeartRate.format("%.2f") + " bpm"
+            "Averages after " +
+                mNTicks.format("%d") +
+                " ticks: Cadence=" +
+                mAverageCadence.format("%.2f") +
+                " RPM, Power=" +
+                mAveragePower.format("%.2f") +
+                " W, Heart Rate=" +
+                mAverageHeartRate.format("%.2f") +
+                " bpm"
         );
         return [mAverageCadence, mAveragePower, mAverageHeartRate];
     }
