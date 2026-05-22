@@ -2,8 +2,8 @@ sync field_utils
 
 check the use of critical/high/warning colors
 
-debug on, show only on big screen extra!
 update pause screen
+debug on, show only on big screen extra!
 
 settings: warning / show progressbar until warning reached.
 -> max duration EF warning (default 5min is max)
@@ -51,8 +51,8 @@ Track Global Session VI (to show overall pacing discipline) and highlight Max Po
 
 ---
 // 1. Capture the absolute max torque smash of the ride
-if (currentTorque > maxInstantTorque) {
-    maxInstantTorque = currentTorque;
+if (currentTQ > maxInstantTorque) {
+    maxInstantTorque = currentTQ;
 }
 
 // 2. Capture the best sustained 3-minute aerobic efficiency block
@@ -102,7 +102,7 @@ function drawColumnLayout(dc, width, height) {
     dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
     dc.drawText(col1X, actualsY, fLarge, actualEF.format("%.2f"), jCenter);
     dc.drawText(col2X, actualsY, fLarge, actualVI.format("%.2f"), jCenter);
-    dc.drawText(col3X, actualsY, fLarge, actualTorque.format("%.1f"), jCenter);
+    dc.drawText(col3X, actualsY, fLarge, actualTQ.format("%.1f"), jCenter);
 
     // --- STEP 4: DRAW LOCKED BASELINES & TREND ALERTS ---
     
@@ -115,8 +115,8 @@ function drawColumnLayout(dc, width, height) {
     dc.drawText(col2X, baselinesY, fTiny, lockedVI.format("%.2f") + " " + getTrendArrow(trendVI), jCenter);
 
     // Column 3: Torque Baseline + Trend Arrow
-    setTrendColor(dc, trendTorque);
-    dc.drawText(col3X, baselinesY, fTiny, lockedTorque.format("%.1f") + " " + getTrendArrow(trendTorque), jCenter);
+    setTrendColor(dc, trendTQ);
+    dc.drawText(col3X, baselinesY, fTiny, lockedTorque.format("%.1f") + " " + getTrendArrow(trendTQ), jCenter);
 }
 
 function drawPauseLayout(dc, width, height) {
@@ -171,7 +171,7 @@ function drawPauseLayout(dc, width, height) {
     // ROW 3: Torque
     y += rowSpacing;
     dc.drawText(colLabel, y, fSmall, "TQ", jLeft);
-    dc.drawText(colAvg, y, fSmall, actualTorque.format("%.1f") + " Nm", jRight);
+    dc.drawText(colAvg, y, fSmall, actualTQ.format("%.1f") + " Nm", jRight);
     dc.drawText(colPeak, y, fSmall, maxInstantTorque.format("%.1f"), jRight);
 }
 ---
@@ -212,7 +212,7 @@ EF Indicator: If trendEF == -1, draw a Red Down Arrow $\downarrow$ next to the E
 
 VI Indicator: If trendVI == -1, draw a Yellow Warning Mark or make the background yellow. This indicates they are surging too hard on hills compared to their first 30 minutes.
 
-Torque Indicator: If trendTorque == -1, show an Up Arrow $\uparrow$. This lets the rider know their leg force is significantly higher than their baseline, warning them that they are entering a muscular fatigue zone and should spin a lighter gear.
+Torque Indicator: If trendTQ == -1, show an Up Arrow $\uparrow$. This lets the rider know their leg force is significantly higher than their baseline, warning them that they are entering a muscular fatigue zone and should spin a lighter gear.
 
 Handling the First 30 Minutes
 
@@ -248,9 +248,9 @@ Trend Value,Meaning,Recommended Icon,Recommended Text Color
 
 TQ
 
-How to use trendTorque = 1 in the UIOn the Garmin screen, this gives the rider incredibly useful feedback:
-trendTorque = -1 (Red Up Arrow $\uparrow$): "Warning: Your leg force is getting too heavy. Shift down and spin faster to save your muscles."trendTorque = 0 (Neutral Dot or Dash ─): "You are maintaining the same pedaling style as your baseline.
-"trendTorque = 1 (Green Down Arrow $\downarrow$): "Great job: You've dropped your torque load. You are relying on your cardio system rather than killing your legs."
+How to use trendTQ = 1 in the UIOn the Garmin screen, this gives the rider incredibly useful feedback:
+trendTQ = -1 (Red Up Arrow $\uparrow$): "Warning: Your leg force is getting too heavy. Shift down and spin faster to save your muscles."trendTQ = 0 (Neutral Dot or Dash ─): "You are maintaining the same pedaling style as your baseline.
+"trendTQ = 1 (Green Down Arrow $\downarrow$): "Great job: You've dropped your torque load. You are relying on your cardio system rather than killing your legs."
 
 trendVI = 1
 trendVI = 0

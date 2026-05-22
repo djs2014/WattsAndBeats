@@ -213,10 +213,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         mCycloData.ActualEF = data[0] as Float;
         mCycloData.ActualVI = data[1] as Float;
-        mCycloData.ActualTorque = data[2] as Float;
+        mCycloData.ActualTQ = data[2] as Float;
         mCycloData.TrendEF = data[3] as Number;
         mCycloData.TrendVI = data[4] as Number;
-        mCycloData.TrendTorque = data[5] as Number;
+        mCycloData.TrendTQ = data[5] as Number;
         mCycloData.Locked = mTrendEngine.isLocked();
         mCycloData.Elapsed = mTrendEngine.getElapsedSeconds();
         mCycloData.BufferSize = mTrendEngine.getBufferSize();
@@ -225,8 +225,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
     function processTrendEngineWarnings() as Void {
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;
-        var trendTorque = mCycloData.TrendTorque;
-        var hasWarning = trendEF == -1 || trendVI == -1 || trendTorque == -1;
+        var trendTQ = mCycloData.TrendTQ;
+        var hasWarning = trendEF == -1 || trendVI == -1 || trendTQ == -1;
 
         // Reset handled state if trend is no longer in warning state
         if (trendEF != -1 && mBeepOnEFWarningHandled) {
@@ -235,7 +235,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         if (trendVI != -1 && mBeepOnVIWarningHandled) {
             mBeepOnVIWarningHandled = false;
         }
-        if (trendTorque != -1 && mBeepOnTQWarningHandled) {
+        if (trendTQ != -1 && mBeepOnTQWarningHandled) {
             mBeepOnTQWarningHandled = false;
         }
 
@@ -258,7 +258,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mBeepOnEFWarningHandled = true;
         } else if (
             $.gBeepOnTQWarning and
-            trendTorque == -1 and
+            trendTQ == -1 and
             !mBeepOnTQWarningHandled
         ) {
             if ($.gBeepOnTQWarning) {
@@ -472,7 +472,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var darkMode = getBackgroundColor() == Graphics.COLOR_BLACK;
 
         // Use inverted background if any serious alerts, otherwise normal background
-        if (mCycloData.TrendEF == -1 || mCycloData.TrendTorque == -1) {
+        if (mCycloData.TrendEF == -1 || mCycloData.TrendTQ == -1) {
             return darkMode ? Graphics.COLOR_WHITE : Graphics.COLOR_BLACK;
         } else {
             return darkMode ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
@@ -497,11 +497,11 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;
-        var trendTorque = mCycloData.TrendTorque;
+        var trendTQ = mCycloData.TrendTQ;
         var locked = mCycloData.Locked;
 
         // 0. DRAW THE BOTTOM WARNING/PROGRESS BAR - so its in the background.
-        updateWarningMessage(trendEF, trendVI, trendTorque);
+        updateWarningMessage(trendEF, trendVI, trendTQ);
 
         var hasWarning = mWarningMessage.length() > 0;
         var infoMessage;
@@ -561,7 +561,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // Highlight box when any of the metrics is in warning state
         var warningPillx = (width * 0.05).toNumber();
-        var warningPillWidth = (width * 0.95).toNumber();
+        var warningPillWidth = (width * 0.90).toNumber();
         var warningPillHeight = (rowHeight * 1.05).toNumber();
         var warningPillYoffset = (rowHeight * 0.7).toNumber();
 
@@ -596,10 +596,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         var actualEF = mCycloData.ActualEF;
         var actualVI = mCycloData.ActualVI;
-        var actualTorque = mCycloData.ActualTorque;
+        var actualTQ = mCycloData.ActualTQ;
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;
-        var trendTorque = mCycloData.TrendTorque;
+        var trendTQ = mCycloData.TrendTQ;
 
         // --- ROW 1: EF ---
         var yEF = startY + rowHeight;
@@ -719,10 +719,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         // --- ROW 3: TQ ---
         var yTQ = startY + rowHeight * 3;
-        var tqString = actualTorque.format("%.2f");
+        var tqString = actualTQ.format("%.2f");
         var tqParts = $.splitStringAtDot(tqString);
 
-        if (trendTorque == -1) {
+        if (trendTQ == -1) {
             // Draw warning highlight for TQ row ORANGE
             dc.setColor(mColorHigh, mColorHigh);
             dc.fillRectangle(
@@ -760,7 +760,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         setTrendDisplayColor(
             dc,
-            trendTorque,
+            trendTQ,
             color[:good],
             Graphics.COLOR_BLACK,
             color[:neutral]
@@ -770,7 +770,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc,
             trendX,
             yTQ,
-            trendTorque,
+            trendTQ,
             shapeSize,
             drawUpTriangleForBad
         );
@@ -809,10 +809,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         var actualEF = mCycloData.ActualEF;
         var actualVI = mCycloData.ActualVI;
-        var actualTorque = mCycloData.ActualTorque;
+        var actualTQ = mCycloData.ActualTQ;
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;
-        var trendTorque = mCycloData.TrendTorque;
+        var trendTQ = mCycloData.TrendTQ;
         var lockedEF = mCycloData.LockedEF;
         var lockedVI = mCycloData.LockedVI;
         var lockedTorque = mCycloData.LockedTorque;
@@ -824,7 +824,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         var EFwarning = trendEF == -1;
         var VIwarning = trendVI == -1;
-        var TQwarning = trendTorque == -1;
+        var TQwarning = trendTQ == -1;
 
         if (EFwarning) {
             // Draw warning highlight for EF column RED
@@ -887,7 +887,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         );
 
         var torqueColor = getTrendDisplayColor(
-            trendTorque,
+            trendTQ,
             color[:faded],
             Graphics.COLOR_BLACK,
             color[:faded]
@@ -968,7 +968,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             col3X,
             actualsY,
             fontActuals,
-            actualTorque.format("%.1f"),
+            actualTQ.format("%.1f"),
             Graphics.TEXT_JUSTIFY_CENTER
         );
 
@@ -1016,7 +1016,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         // Column 3: Torque Baseline + Trend Arrow
         setTrendDisplayColor(
             dc,
-            trendTorque,
+            trendTQ,
             color[:good],
             Graphics.COLOR_BLACK,
             color[:neutral]
@@ -1028,7 +1028,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             lockedFont,
             lockedTorque.format("%.1f") +
                 " " +
-                getTrendArrow(trendTorque, drawUpTriangleForBad),
+                getTrendArrow(trendTQ, drawUpTriangleForBad),
             Graphics.TEXT_JUSTIFY_CENTER
         );
     }
@@ -1067,7 +1067,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         text += "Actual VI: " + mCycloData.ActualVI.format("%.2f") + "\n";
         text +=
             "Actual Torque: " +
-            mCycloData.ActualTorque.format("%.1f") +
+            mCycloData.ActualTQ.format("%.1f") +
             "Nm" +
             "\n";
 
@@ -1089,7 +1089,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
         text += "Trend EF: " + mCycloData.TrendEF.format("%d") + "\n";
         text += "Trend VI: " + mCycloData.TrendVI.format("%d") + "\n";
-        text += "Trend Torque: " + mCycloData.TrendTorque.format("%d") + "\n";
+        text += "Trend Torque: " + mCycloData.TrendTQ.format("%d") + "\n";
 
         text +=
             "Elapsed: " +
@@ -1197,7 +1197,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
     function updateWarningMessage(
         trendEF as Number,
         trendVI as Number,
-        trendTorque as Number
+        trendTQ as Number
     ) as Void {
         var sep = " ";
         if (mEf == EfSmall) {
@@ -1210,7 +1210,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mWarningColor = mColorCritical;
         }
         // Priority 2: High Muscle Strain (Torque too high)
-        else if (trendTorque == -1) {
+        else if (trendTQ == -1) {
             mWarningMessage = "LEGS MASHING:" + sep + "SHIFT DOWN & SPIN";
             mWarningColor = mColorHigh;
         }
@@ -1443,7 +1443,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 class CycloData {
     public var ActualEF as Float = 0.0f;
     public var ActualVI as Float = 0.0f;
-    public var ActualTorque as Float = 0.0f;
+    public var ActualTQ as Float = 0.0f;
 
     public var LockedEF as Float = 0.0f;
     public var LockedVI as Float = 0.0f;
@@ -1451,7 +1451,7 @@ class CycloData {
 
     public var TrendEF as Number = 0;
     public var TrendVI as Number = 0;
-    public var TrendTorque as Number = 0;
+    public var TrendTQ as Number = 0;
 
     public var Locked as Boolean = false;
     public var BlockCompleted as Number = 0;
@@ -1468,7 +1468,7 @@ class CycloData {
             ", VI: " +
             ActualVI.format("%.2f") +
             ", Torque: " +
-            ActualTorque.format("%.1f") +
+            ActualTQ.format("%.1f") +
             "Nm"
         );
     }

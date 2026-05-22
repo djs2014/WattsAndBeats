@@ -153,7 +153,7 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       boolean = $.getStorageValue("beep_onTQwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
-          "Torque warning (beep)",
+          "TQ warning (beep)",
           null,
           "beep_onTQwarning",
           boolean,
@@ -163,7 +163,7 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       boolean = $.getStorageValue("toast_onTQwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
-          "Torque warning (toast)",
+          "TQ warning (toast)",
           null,
           "toast_onTQwarning",
           boolean,

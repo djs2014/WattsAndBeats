@@ -21,13 +21,13 @@ class TrendEngine {
     // Locked Snapshots (from the previous 30-minute block)
     var lockedEF as Float = 0.0f;
     var lockedVI as Float = 0.0f;
-    var lockedTorque as Float = 0.0f;
+    var lockedTQ as Float = 0.0f;
     var lockNowOnLap as Boolean = false;
 
     // Trend Outputs (-1 = Decoupling/Failing, 0 = Steady, 1 = Improving)
     var trendEF as Number = 0;
     var trendVI as Number = 0;
-    var trendTorque as Number = 0;
+    var trendTQ as Number = 0;
 
     // Peak and Max tracking variables
     var maxInstantTorque = 0.0;
@@ -108,21 +108,21 @@ class TrendEngine {
         // System.println(["Global NP", globalNP]);
 
         // 1. Calculate Instantaneous Torque (Nm)
-        var currentTorque = 0.0;
+        var currentTQ = 0.0;
         // 2 * Math.PI / 60 simplifies to a constant of roughly 0.10472
         var angularVelocity = cadence * 0.104719755;
         if (angularVelocity > 0) {
-            currentTorque = power / angularVelocity;
-            if (currentTorque > maxTorque) {
-                maxTorque = currentTorque;
+            currentTQ = power / angularVelocity;
+            if (currentTQ > maxTorque) {
+                maxTorque = currentTQ;
             }
-            // System.println(["Power", power, "angularVelocity", angularVelocity, "Torque", currentTorque]);
+            // System.println(["Power", power, "angularVelocity", angularVelocity, "Torque", currentTQ]);
         }
 
         // 2. Feed the 180-second Rolling Buffers (not ignoring the zeros)
         powerHistory[writeIndex] = power;
         hrHistory[writeIndex] = heartRate;
-        torqueHistory[writeIndex] = currentTorque;
+        torqueHistory[writeIndex] = currentTQ;
 
         writeIndex = (writeIndex + 1) % buffer180;
         if (writeIndex == 0) {
@@ -168,31 +168,31 @@ class TrendEngine {
 
         var actualPower;
         var actualHR;
-        var actualTorque;
+        var actualTQ;
         var actualEF;
         // Efficiency (EF) and Mechanics (Torque) only use working seconds
         if (validEffortCount >= 5) {
             // Ensure we have a tiny bit of pedaling data
             actualPower = sumPowerForEF / validEffortCount;
             actualHR = sumHRForEF / validEffortCount;
-            actualTorque = sumTorque / validEffortCount;
+            actualTQ = sumTorque / validEffortCount;
             actualEF = actualHR > 0 ? actualPower / actualHR : 0.0;
             previousPower = actualPower;
             previousHR = actualHR;
-            previousTorque = actualTorque;
+            previousTorque = actualTQ;
             previousEF = actualEF;
         } else {
             // If they coasted for almost the entire last 3 minutes,
             // hold the previous valid calculation to prevent diving to 0
             actualPower = previousPower;
             actualHR = previousHR;
-            actualTorque = previousTorque;
+            actualTQ = previousTorque;
             actualEF = previousEF;
         }
 
         // 1. Capture the absolute max torque smash of the ride
-        if (currentTorque > maxInstantTorque) {
-            maxInstantTorque = currentTorque;
+        if (currentTQ > maxInstantTorque) {
+            maxInstantTorque = currentTQ;
         }
 
         // 2. Capture the best sustained 3-minute aerobic efficiency block
@@ -211,11 +211,11 @@ class TrendEngine {
             lockNowOnLap = false; // Reset the flag after locking
             lockedEF = actualEF;
             lockedVI = actualVI;
-            lockedTorque = actualTorque;
+            lockedTQ = actualTQ;
             elapsedSeconds = 0; // Reset the block timer to give them a full lock window after manual lock
 
             if (methodBlockCompleted != null) {
-                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
         }
 
@@ -224,18 +224,18 @@ class TrendEngine {
             hasFirstBaseline = true;
             lockedEF = actualEF;
             lockedVI = actualVI;
-            lockedTorque = actualTorque;
+            lockedTQ = actualTQ;
             if (methodBlockCompleted != null) {
-                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
         } else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
             System.println("LOCKING TREND SNAPSHOT");
             lockedEF = actualEF;
             lockedVI = actualVI;
-            lockedTorque = actualTorque;
+            lockedTQ = actualTQ;
 
             if (methodBlockCompleted != null) {
-                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
         }
 
@@ -267,13 +267,13 @@ class TrendEngine {
 
             // Torque Trend: Dropping torque at the same power means user is shifting to a spinning cadence
             // A 10% increase at the same power output means their cadence has dropped by roughly 8–10 RPM, meaning they are starting to bog down and drag their legs.
-            if (actualTorque > lockedTorque * 1.1) {
-                trendTorque = -1; // Torque jumped over 10% -> "Mashing"
+            if (actualTQ > lockedTQ * 1.1) {
+                trendTQ = -1; // Torque jumped over 10% -> "Mashing"
             } // Mashing gears too hard (muscle fatigue)
-            else if (actualTorque < lockedTorque * 0.9) {
-                trendTorque = 1; // Torque dropped over 10% -> "Spinning efficiently"
+            else if (actualTQ < lockedTQ * 0.9) {
+                trendTQ = 1; // Torque dropped over 10% -> "Spinning efficiently"
             } else {
-                trendTorque = 0; // Within the stable 10% dead-zone
+                trendTQ = 0; // Within the stable 10% dead-zone
             }
 
             // System.println(
@@ -294,21 +294,21 @@ class TrendEngine {
             // );
             // System.println(
             //     "Locked Torque: " +
-            //         lockedTorque.format("%.2f") +
+            //         lockedTQ.format("%.2f") +
             //         ", Actual Torque: " +
-            //         actualTorque.format("%.2f") +
+            //         actualTQ.format("%.2f") +
             //         ", Trend Torque: " +
-            //         trendTorque
+            //         trendTQ
             // );
         }
 
         return [
             actualEF,
             actualVI,
-            actualTorque,
+            actualTQ,
             trendEF,
             trendVI,
-            trendTorque,
+            trendTQ,
         ];
     }
 
@@ -385,7 +385,7 @@ class TrendEngine {
     }
 
     function getTrends() as Array<Number> {
-        return [trendEF, trendVI, trendTorque];
+        return [trendEF, trendVI, trendTQ];
     }
     function getMaxValues() as Array<Float> {
         return [peakRollingEF, maxRollingVI, maxInstantTorque];
@@ -416,10 +416,10 @@ class TrendEngine {
         elapsedSeconds = 0;
         lockedEF = 0.0f;
         lockedVI = 0.0f;
-        lockedTorque = 0.0f;
+        lockedTQ = 0.0f;
         trendEF = 0;
         trendVI = 0;
-        trendTorque = 0;
+        trendTQ = 0;
         // Rest global NP tracking
         // mPowerTicks = 0;
         globalNP = 0;
