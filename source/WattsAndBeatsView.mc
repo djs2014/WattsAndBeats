@@ -138,7 +138,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
     function onTimerLap2(trigger as DataField.LapInfoType) as Lang.Boolean {
         System.println(["Lap triggered: ", trigger]);
         if (trigger == DataField.LAP_TRIGGER_MANUAL) {
-            System.println("Lap button pressed");           
+            System.println("Lap button pressed");
             if ($.gLockOnLapKey) {
                 var locked = mTrendEngine.lockNow();
                 if (locked) {
@@ -1678,11 +1678,12 @@ class WattsAndBeatsView extends WatchUi.DataField {
     // Returns an interpretation object for EF (Aerobic Efficiency)
     // For smaller screen max 8 characters
     function evaluateEFDecoupling(avgEF, currentEF, isSmallScreen as Boolean) {
-        var color = getThemeColor(mDarkBackground);
         if (avgEF == null || currentEF == null || avgEF == 0) {
             return {
                 :text => isSmallScreen ? "Calc..." : "Calculating...",
-                :color => color[:faded],
+                :color => mDarkBackground
+                    ? Graphics.COLOR_DK_GRAY
+                    : Graphics.COLOR_LT_GRAY,
             };
         }
 
@@ -1694,46 +1695,51 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 :text => isSmallScreen
                     ? drift.format("%.0f") + "% Dcop"
                     : "Decoupling (" + drift.format("%.1f") + "%)",
-                :color => color[:critical],
+                :color => mColorCritical,
             };
         } else if (drift < -5.0) {
             return {
                 :text => isSmallScreen
                     ? drift.format("%.0f") + "% Drft"
                     : "Mild Drift (" + drift.format("%.1f") + "%)",
-                :color => color[:warning],
+                :color => mColorWarning,
             };
         }
         return {
             :text => isSmallScreen ? "Stable" : "Aerobic Stable",
-            :color => color[:good],
+            :color => mDarkBackground
+                ? Graphics.COLOR_GREEN
+                : Graphics.COLOR_DK_GREEN,
         };
     }
 
     // Returns an interpretation object for VI (Pacing Variability)
     function evaluateVIPacing(sessionVI, isSmallScreen as Boolean) {
-        var color = getThemeColor(mDarkBackground);
         if (sessionVI == null || sessionVI == 0) {
             return {
                 :text => "No Data",
-                :color => color[:faded],
+                :color => mDarkBackground
+                    ? Graphics.COLOR_DK_GRAY
+                    : Graphics.COLOR_LT_GRAY,
             };
         }
 
         if (sessionVI > 1.08) {
             return {
                 :text => isSmallScreen ? "Surged" : "Poor Pacing (Surged)",
-                :color => color[:critical],
+                :color => mColorCritical,
             };
         } else if (sessionVI > 1.04) {
             return {
                 :text => isSmallScreen ? "Spiky" : "Stochastic Ride",
-                :color => color[:warning],
+                :color => mColorWarning,
             };
         }
         return {
             :text => isSmallScreen ? "Steady" : "Steady Pacing",
-            :color => color[:good],
+            :color => mDarkBackground
+                ? Graphics.COLOR_GREEN
+                : Graphics.COLOR_DK_GREEN,
         };
     }
 
@@ -1743,7 +1749,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
         maxTorque,
         isSmallScreen as Boolean
     ) {
-        var color = getThemeColor(mDarkBackground);
         if (
             avgTorque == null ||
             maxTorque == null ||
@@ -1752,7 +1757,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
         ) {
             return {
                 :text => "No Data",
-                :color => color[:faded],
+                :color => mDarkBackground
+                    ? Graphics.COLOR_DK_GRAY
+                    : Graphics.COLOR_LT_GRAY,
             };
         }
 
@@ -1762,18 +1769,20 @@ class WattsAndBeatsView extends WatchUi.DataField {
             // High Neuromuscular Strain
             return {
                 :text => isSmallScreen ? "Strain" : "High N-M Strain",
-                :color => color[:critical],
+                :color => mColorCritical,
             };
         } else if (ratio > 2.5) {
             return {
                 // Heavy Neuromuscular Strain
                 :text => isSmallScreen ? "Heavy" : "Heavy N-M Strain",
-                :color => color[:high],
+                :color => mColorHigh,
             };
         }
         return {
             :text => isSmallScreen ? "Smooth" : "Smooth Delivery",
-            :color => color[:good],
+            :color => mDarkBackground
+                ? Graphics.COLOR_GREEN
+                : Graphics.COLOR_DK_GREEN,
         };
     }
 
