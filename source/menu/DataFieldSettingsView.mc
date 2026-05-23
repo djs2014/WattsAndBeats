@@ -70,6 +70,9 @@ class DataFieldSettingsDelegate extends WatchUi.BehaviorDelegate {
     boolean = $.getStorageValue("debugMode", false) as Boolean;
     menu.addItem(new WatchUi.ToggleMenuItem("Debug", null, "debugMode", boolean, null));
 
+    boolean = $.getStorageValue("showPauseScreen", true) as Boolean;
+    menu.addItem(new WatchUi.ToggleMenuItem("Show Pause Screen", null, "showPauseScreen", boolean, null));
+
     boolean = $.getStorageValue("resetDefaults", false) as Boolean;
     menu.addItem(new WatchUi.ToggleMenuItem("Reset", null, "resetDefaults", boolean, null));
 

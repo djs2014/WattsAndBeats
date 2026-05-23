@@ -44,7 +44,6 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.StorageSetValue("debugMode", false);
             $.StorageSetValue("lock_onlapkey", false);
             $.StorageSetValue("lock_onautolap", true);
-            $.StorageSetValue("beep_onlap", false);
             $.StorageSetValue("beep_onlock", false);
             $.StorageSetValue("beep_onEFwarning", false);
             $.StorageSetValue("beep_onVIwarning", false);
@@ -57,14 +56,16 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.StorageSetValue("text_whiteonred", true);
             $.StorageSetValue("text_whiteonorange", true);
             $.StorageSetValue("text_whiteonyellow", true);
+
+            $.StorageSetValue("showPauseScreen", true);
         }
 
         // TODO
         $.gDebug = $.getStorageValue("debugMode", false) as Boolean;
+        $.gShowPauseScreen = $.getStorageValue("showPauseScreen", true) as Boolean;
 
         // TODO $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
         $.gLockOnAutoLap = $.getStorageValue("lock_onautolap", true) as Boolean;
-        $.gBeepOnLap = $.getStorageValue("beep_onlap", false) as Boolean;
         $.gBeepOnLock = $.getStorageValue("beep_onlock", false) as Boolean;
         $.gBeepOnEFWarning =
             $.getStorageValue("beep_onEFwarning", false) as Boolean;
@@ -143,12 +144,12 @@ function getTrendEngine() as TrendEngine {
 var gTrendEngine as TrendEngine?;
 
 var gDebug as Boolean = false;
+var gShowPauseScreen as Boolean = true;
 var gLockOnLapKey as Boolean = false;
 var gLockOnAutoLap as Boolean = true;
 var gLockIntervalSec as Number = 1800;
 var gInitialEFOnLap as Boolean = false;
 
-var gBeepOnLap as Boolean = false;
 var gBeepOnLock as Boolean = false;
 var gBeepOnEFWarning as Boolean = false;
 var gBeepOnVIWarning as Boolean = false;

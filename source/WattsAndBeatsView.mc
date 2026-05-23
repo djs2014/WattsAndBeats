@@ -4,7 +4,6 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 
 class WattsAndBeatsView extends WatchUi.DataField {
-    hidden var mDebug as Boolean = false;
     hidden var mDemoCounter as Number = 0;
     hidden var mDemoDuration as Number = 360; // 6 minutes of demo data
     hidden var mPaused as Boolean = true;
@@ -23,8 +22,13 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
     hidden var mFirstBlockEF as Float = -1.0f;
     hidden var mLatestBlockEF as Float = 0.0f;
+
     hidden var mAveragePower as Number = 0;
     hidden var mAverageCadence as Number = 0;
+    hidden var mCurrentPower as Number = 0;
+    hidden var mCurrentHeartRate as Number = 0;
+
+    hidden var mPreviousValidGlobalNP as Number = 0;
 
     hidden var mHeaderFont as Graphics.FontType = Graphics.FONT_MEDIUM;
 
@@ -36,13 +40,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mColorHigh as ColorType = Graphics.COLOR_YELLOW;
     hidden var mColorWarning as ColorType = Graphics.COLOR_YELLOW;
     hidden var mColorNeutral as ColorType = Graphics.COLOR_LT_GRAY;
-
     function initialize() {
         DataField.initialize();
         mTrendEngine = getTrendEngine();
         mTrendEngine.setOnBlockCompleted(self, :onBlockCompleted);
-
-        var edgeVersion = $.getEdgeVersion();
 
         // 30 series no orange
         if (Graphics has :COLOR_ORANGE) {
@@ -57,6 +58,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         mCycloData.LockedVI = data[1];
         mCycloData.LockedTorque = data[2];
 
+        // TODO -> use it here or remove?
         if (mFirstBlockEF < 0) {
             mFirstBlockEF = data[0];
         }
@@ -104,9 +106,19 @@ class WattsAndBeatsView extends WatchUi.DataField {
             }
         }
 
-        mAveragePower = $.getActivityValue(info, :averagePower, 0) as Number;
-        mAverageCadence =
+        mCurrentPower = $.getActivityValue(info, :currentPower, 0) as Number;
+        mCurrentHeartRate =
+            $.getActivityValue(info, :currentHeartRate, 0) as Number;
+
+        var averagePower = $.getActivityValue(info, :averagePower, 0) as Number;
+        var averageCadence =
             $.getActivityValue(info, :averageCadence, 0) as Number;
+        if (!mPaused) {
+            // Pause screen will use the last valid averages to show a stable value
+            // instead of fluctuating values when pausing/unpausing
+            mAveragePower = averagePower;
+            mAverageCadence = averageCadence;
+        }
 
         if (mTrendEngine.isDemo()) {
             if (!mPaused) {
@@ -126,10 +138,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
     function onTimerLap2(trigger as DataField.LapInfoType) as Lang.Boolean {
         System.println(["Lap triggered: ", trigger]);
         if (trigger == DataField.LAP_TRIGGER_MANUAL) {
-            System.println("Lap button pressed");
-            if ($.gBeepOnLap) {
-                alertOnEvent(Attention.TONE_LAP);
-            }
+            System.println("Lap button pressed");           
             if ($.gLockOnLapKey) {
                 var locked = mTrendEngine.lockNow();
                 if (locked) {
@@ -152,9 +161,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
             }
         }
         if ($.gLockOnAutoLap) {
-            if ($.gBeepOnLap) {
-                alertOnEvent(Attention.TONE_LAP);
-            }
             var locked = mTrendEngine.lockNow();
             if (locked) {
                 System.println("Data locked on auto lap");
@@ -172,7 +178,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
     ) as Void {
         // Example of playing a tone on a specific event (e.g., lock)
         if (Attention has :playTone && System.getDeviceSettings().tonesOn) {
-            Attention.playTone(Attention.TONE_LAP);
+            // TONE_LAP is nearly silent on the 1050 speaker hardware.
+            // TONE_CANARY or TONE_LOUD_BEEP will actually cut through the wind!
+            Attention.playTone(options);
         }
     }
 
@@ -257,7 +265,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         // Prio EF over Torque over Vi
         if (trendEF == -1 and !mBeepOnEFWarningHandled) {
             if ($.gBeepOnEFWarning) {
-                alertOnEvent(Attention.TONE_ALARM);
+                alertOnEvent(Attention.TONE_LOUD_BEEP);
             }
             if ($.gToastOnEFWarning) {
                 toastOnEvent("Aerobic decoupling! (EF)");
@@ -269,7 +277,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             !mBeepOnTQWarningHandled
         ) {
             if ($.gBeepOnTQWarning) {
-                alertOnEvent(Attention.TONE_ALARM);
+                alertOnEvent(Attention.TONE_LOUD_BEEP);
             }
             if ($.gToastOnTQWarning) {
                 toastOnEvent("Torque Warning! (TQ)");
@@ -277,7 +285,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mBeepOnTQWarningHandled = true;
         } else if (trendVI == -1 and !mBeepOnVIWarningHandled) {
             if ($.gBeepOnVIWarning) {
-                alertOnEvent(Attention.TONE_ALARM);
+                alertOnEvent(Attention.TONE_LOUD_BEEP);
             }
             if ($.gToastOnVIWarning) {
                 toastOnEvent("Pacing! (VI)");
@@ -314,12 +322,12 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mDemoCounter
             );
         }
-        if (mDebug) {
+        if ($.gDebug && mEf == EfOne) {
             drawDebugInfo(dc);
             return;
         }
 
-        if (mPaused && mActivityStarted) {
+        if (mPaused && mActivityStarted && $.gShowPauseScreen) {
             drawPausedState(dc);
             return;
         }
@@ -339,9 +347,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var color = getThemeColor(mDarkBackground);
         var width = dc.getWidth();
         var height = dc.getHeight();
-
-        // dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        // dc.clear();
 
         // 1. Scalable Column X Anchors
         var colLabel = (width * 0.06).toNumber();
@@ -401,20 +406,35 @@ class WattsAndBeatsView extends WatchUi.DataField {
             subHeaderY + 12
         );
 
+        // During pause these values can be null
+        var safeAvgPower = mAveragePower != null ? mAveragePower : 0.0;
+        var safeAvgCadence = mAverageCadence != null ? mAverageCadence : 0.0;
+
         // Calculate dynamic session metrics
         var currentSessionVI = 1.0;
-        if (mAveragePower > 0) {
+        if (safeAvgPower > 0) {
             var globalNP = mTrendEngine.getNormalizedPower();
             System.println("Global NP: " + globalNP.format("%.2f") + " W");
-            currentSessionVI = globalNP / mAveragePower;
+            currentSessionVI = (globalNP / safeAvgPower).toFloat();
         }
 
         var actualEF = mCycloData.ActualEF;
         var globalInitialEF = mTrendEngine.getGlobalInitialEF();
         var maxValues = mTrendEngine.getMaxValues();
-        //var maxRollingEF = maxValues[0];
-        var maxRollingVI = maxValues[1];
-        var maxInstantTorque = maxValues[2];
+        var maxRollingEF = 0.0f;
+        var maxRollingVI = 0.0f;
+        var maxInstantTorque = 0.0f;
+        if (
+            maxValues != null &&
+            maxValues.size() >= 3 &&
+            maxValues[0] != null &&
+            maxValues[1] != null &&
+            maxValues[2] != null
+        ) {
+            maxRollingEF = maxValues[0];
+            maxRollingVI = maxValues[1];
+            maxInstantTorque = maxValues[2];
+        }
 
         // Evaluate statuses
         var efStatus = evaluateEFDecoupling(
@@ -424,10 +444,12 @@ class WattsAndBeatsView extends WatchUi.DataField {
         );
         var viStatus = evaluateVIPacing(currentSessionVI, isSmallScreen);
 
-        var averageTorqueAccumulator = 0;
-        if (mAverageCadence > 0) {
-            averageTorqueAccumulator =
-                mAveragePower / (mAverageCadence * 0.10472);
+        var averageTorqueAccumulator = 0.0f;
+        if (safeAvgCadence > 0) {
+            averageTorqueAccumulator = (
+                safeAvgPower /
+                (safeAvgCadence * 0.10472)
+            ).toFloat();
         }
 
         var tqStatus = evaluateTorqueStrain(
@@ -1107,59 +1129,293 @@ class WattsAndBeatsView extends WatchUi.DataField {
         return "•"; // Stable baseline
     }
 
+    // Reordered to match pause screen and maintain a consistent sequence across screens (EF, VI, TQ)
     function drawDebugInfo(dc as Dc) as Void {
         var color = getThemeColor(mDarkBackground);
         dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
 
-        var globalNP = mTrendEngine.getNormalizedPower();
+        var font = Graphics.FONT_SYSTEM_TINY;
+        var fontHeight = dc.getFontHeight(font);
 
-        var blockCompletedString = "No";
-        if (mCycloData.BlockCompleted > 0) {
-            var time = new Time.Moment(mCycloData.BlockCompleted);
-            blockCompletedString = $.getLongTimeString(time);
+        // Start drawing near the top boundary of the large data field layout
+        var xPos = dc.getWidth() / 2;
+        var yPos = 10;
+        var justify = Graphics.TEXT_JUSTIFY_CENTER;
+
+        // --- 1. ACTUAL CURRENT VALUES (EF -> VI -> TQ) ---
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "--- ACTUALS (EF | VI | TQ) ---",
+            justify
+        );
+        yPos += fontHeight;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "EF: " +
+                mCycloData.ActualEF.format("%.2f") +
+                " | VI: " +
+                mCycloData.ActualVI.format("%.2f") +
+                " | TQ: " +
+                mCycloData.ActualTQ.format("%.1f") +
+                "Nm",
+            justify
+        );
+        yPos += fontHeight + 4;
+
+        // --- 2. LOCKED BASELINE VALUES (EF -> VI -> TQ) ---
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "--- LOCKED BASELINES [Locked: " +
+                (mCycloData.Locked ? "Yes" : "No") +
+                "] ---",
+            justify
+        );
+        yPos += fontHeight;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "EF: " +
+                mCycloData.LockedEF.format("%.2f") +
+                " | VI: " +
+                mCycloData.LockedVI.format("%.2f") +
+                " | TQ: " +
+                mCycloData.LockedTorque.format("%.1f") +
+                "Nm",
+            justify
+        );
+        yPos += fontHeight + 4;
+
+        // --- 3. TREND DIRECTIONAL INTEGER OUTPUTS (EF -> VI -> TQ) ---
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "--- TREND CODES (EF | VI | TQ) ---",
+            justify
+        );
+        yPos += fontHeight;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "EF: " +
+                mCycloData.TrendEF.format("%d") +
+                " | VI: " +
+                mCycloData.TrendVI.format("%d") +
+                " | TQ: " +
+                mCycloData.TrendTQ.format("%d"),
+            justify
+        );
+        yPos += fontHeight + 4;
+
+        // --- 4. GLOBAL HISTORICAL AVERAGES & RUNNING SESSION STATS ---
+        dc.drawText(xPos, yPos, font, "--- SESSION RUNNING STATS ---", justify);
+        yPos += fontHeight;
+        // Session EF
+        var globalInitialEF = mTrendEngine.getGlobalInitialEF();
+        var drift = 0.0;
+        if (globalInitialEF > 0) {
+            drift =
+                ((mCycloData.ActualEF - globalInitialEF) / globalInitialEF) *
+                100.0;
         }
-        var text = "Actual EF: " + mCycloData.ActualEF.format("%.2f") + "\n";
-        text += "Actual VI: " + mCycloData.ActualVI.format("%.2f") + "\n";
-        text +=
-            "Actual Torque: " +
-            mCycloData.ActualTQ.format("%.1f") +
-            "Nm" +
-            "\n";
-
-        text +=
-            "Block " +
-            mBlockCompletedCounter.format("%02d") +
-            " Completed at: \n" +
-            blockCompletedString +
-            "\n";
-
-        text += "Locked: " + (mCycloData.Locked ? "Yes" : "No") + "\n";
-        text += "Locked EF: " + mCycloData.LockedEF.format("%.2f") + "\n";
-        text += "Locked VI: " + mCycloData.LockedVI.format("%.2f") + "\n";
-        text +=
-            "Locked Torque: " +
-            mCycloData.LockedTorque.format("%.1f") +
-            "Nm" +
-            "\n";
-
-        text += "Trend EF: " + mCycloData.TrendEF.format("%d") + "\n";
-        text += "Trend VI: " + mCycloData.TrendVI.format("%d") + "\n";
-        text += "Trend Torque: " + mCycloData.TrendTQ.format("%d") + "\n";
-
-        text +=
-            "Elapsed: " +
-            $.secondsToHourMinutesSeconds(mCycloData.Elapsed) +
-            "\n";
-        text += "Global NP: " + globalNP.format("%.2f") + "\n";
 
         dc.drawText(
-            dc.getWidth() / 2,
-            dc.getHeight() / 2,
-            Graphics.FONT_SYSTEM_MEDIUM,
-            text,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER
+            xPos,
+            yPos,
+            font,
+            "Init EF: " +
+                globalInitialEF.format("%.2f") +
+                " | Curr EF: " +
+                mCycloData.ActualEF.format("%.2f") +
+                " | Drift: " +
+                drift.format("%.1f") +
+                "%",
+            justify
+        );
+
+        yPos += fontHeight;
+
+        var globalNP = mTrendEngine.getNormalizedPower();
+
+        // Latch logic: If the engine returns 0 (recalculating),
+        // fall back to a backup variable so your screen doesn't show a sudden drop
+        var latched = false;
+        if (globalNP <= 0.0 && mCycloData.LockedEF > 0) {
+            globalNP = mPreviousValidGlobalNP;
+            latched = true;
+        } else {
+            mPreviousValidGlobalNP = globalNP; // Save the active running value
+        }
+
+        var currentSessionVI =
+            mAveragePower > 0 ? globalNP / mAveragePower : 1.0;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "NP: " +
+                globalNP.format("%.1f") +
+                "W" +
+                (latched ? " (latched)" : "") +
+                " | Avg Pwr: " +
+                mAveragePower.format("%.1f") +
+                "W | Sess VI: " +
+                currentSessionVI.format("%.2f"),
+            justify
+        );
+        yPos += fontHeight;
+
+        var averageTorqueAccumulator = 0.0;
+        if (mAverageCadence > 0) {
+            averageTorqueAccumulator =
+                mAveragePower / (mAverageCadence * 0.10472);
+        }
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Avg Cad: " +
+                mAverageCadence.format("%.0f") +
+                " RPM | Avg TQ: " +
+                averageTorqueAccumulator.format("%.1f") +
+                " Nm",
+            justify
+        );
+
+        yPos += fontHeight;
+        // Session TQ
+        var maxValues = mTrendEngine.getMaxValues();
+        var torqueRatio = 0.0;
+        if (averageTorqueAccumulator > 0) {
+            var maxTorque = maxValues[2];
+            torqueRatio = maxTorque / averageTorqueAccumulator;
+        }
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Max/ Avg TQ Ratio: " + torqueRatio.format("%.2f"),
+            justify
+        );
+        yPos += fontHeight + 4;
+
+        // --- 5. PEAK / RECORDED HISTORICAL MAXES ---
+        dc.drawText(xPos, yPos, font, "--- HISTORICAL MAXES ---", justify);
+        yPos += fontHeight;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Max EF: " +
+                maxValues[0].format("%.2f") +
+                " | Max VI: " +
+                maxValues[1].format("%.2f") +
+                " | Max TQ: " +
+                maxValues[2].format("%.1f") +
+                "Nm",
+            justify
+        );
+        yPos += fontHeight + 4;
+
+        // --- 6. ENGINE SYSTEM TIMERS & INFRASTRUCTURE ---
+        dc.drawText(xPos, yPos, font, "--- SYSTEM & TIMERS ---", justify);
+        yPos += fontHeight;
+
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Blk " +
+                mBlockCompletedCounter.format("%02d") +
+                " at: " +
+                $.getLongTimeString(
+                    new Time.Moment(mCycloData.BlockCompleted)
+                ) +
+                " | Next Lock In: " +
+                $.secondsToHourMinutesSeconds(
+                    mTrendEngine.getSecondsToNextLock()
+                ),
+            justify
+        );
+        yPos += fontHeight;
+
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Init EF after " +
+                $.secondsToHourMinutesSeconds(mTrendEngine.getInitialEFSec()),
+            justify
+        );
+        yPos += fontHeight;
+
+        var smoothingWindowSec = mTrendEngine.getSmoothingWindowSec();
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Smooth: " +
+                smoothingWindowSec.format("%.0f") +
+                "s | Elapsed: " +
+                $.secondsToHourMinutesSeconds(mCycloData.Elapsed),
+            justify
+        );
+
+        // If validEffortCount freezes at 30 or suddenly drops to 0 unexpectedly,
+        yPos += fontHeight;
+        var sumPowerForEF = mTrendEngine.getSumPowerForEF();
+        var validEffortCount = mTrendEngine.getValidEffortCount();
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Buffer Count: " +
+                validEffortCount.format("%d") +
+                " | Raw Sum: " +
+                sumPowerForEF.format("%.0f"),
+            justify
+        );
+
+        // TODO Calculate rolling NP for the last 30s and display alongside global NP
+        // to see how current effort compares to overall session trend.
+        // It allows you to check whether a high VI alert triggered because your
+        // rolling NP rocketed up or because your average power plummeted.
+        // yPos += fontHeight;
+        // var rollingNP = mTrendEngine.getRollingNormalizedPower(); // If you have a 30s NP method
+        // dc.drawText(
+        //     xPos,
+        //     yPos,
+        //     font,
+        //     "Roll NP: " +
+        //         rollingNP.format("%.1f") +
+        //         "W | Glob NP: " +
+        //         globalNP.format("%.1f") +
+        //         "W",
+        //     justify
+        // );
+
+        yPos += fontHeight;
+        dc.drawText(
+            xPos,
+            yPos,
+            font,
+            "Raw Pwr: " +
+                mCurrentPower.format("%d") +
+                "W | Raw HR: " +
+                mCurrentHeartRate.format("%d") +
+                " bpm",
+            justify
         );
     }
+
     function getThemeColor(darkBackground) as Dictionary<String, ColorType> {
         return {
             :text => darkBackground

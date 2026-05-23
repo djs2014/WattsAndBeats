@@ -18,6 +18,8 @@ class TrendEngine {
 
     var isBufferFull as Boolean = false;
 
+    // Global elapsed seconds
+    var activitySeconds as Number = 0;    
     // Total elapsed seconds of active riding
     var elapsedSeconds = 0;
 
@@ -37,9 +39,9 @@ class TrendEngine {
     var trendTQ as Number = 0;
 
     // Peak and Max tracking variables
-    var maxInstantTorque = 0.0;
-    var peakRollingEF = 0.0;
-    var maxRollingVI = 0.0; // Captures their most chaotic 3-minute surging window
+    var maxInstantTorque = 0.0f;
+    var peakRollingEF = 0.0f;
+    var maxRollingVI = 0.0f; // Captures their most chaotic 3-minute surging window
 
     var useDemoData as Boolean = false;
 
@@ -137,11 +139,25 @@ class TrendEngine {
         return true;
     }
 
+    // Debug getters
+    var _sumPowerForEF as Float = 0.0f;
+    function getSumPowerForEF() as Float {        
+        return _sumPowerForEF;
+    }
+    var _validEffortCount as Number = 0;
+    function getValidEffortCount() as Number {        
+        return _validEffortCount;
+    }
+    var _rollingNP as Number = 0;
+    function getRollingNormalizedPower() as Number {
+        return _rollingNP;
+    }
+
     // Calculated per second, when activity paused, do not compute!
     function compute(
         cadence as Number,
         power as Number,
-        heartRate as Number
+        heartRate as Number        
     ) as Array<Float or Number>? {
         // Skip TQ calculation if power is 0
         // Skip EF calculation if power is 0
@@ -149,8 +165,7 @@ class TrendEngine {
 
         // Update global NP tracking
         globalNP = calculateNormalizedPower(calculatePower30(power));
-        System.println(["Global NP", globalNP]);
-
+        
         // 1. Calculate Instantaneous Torque (Nm)
         var currentTQ = 0.0;
         // 2 * Math.PI / 60 simplifies to a constant of roughly 0.10472
@@ -173,6 +188,7 @@ class TrendEngine {
             isBufferFull = true;
         }
         elapsedSeconds++;
+        activitySeconds++;
 
         // 3. Process actual rolling metrics (>Only if we have data)
         var limit = isBufferFull ? buffer180 : writeIndex;
@@ -203,6 +219,9 @@ class TrendEngine {
                 validEffortCount++;
             }
         }
+
+        _sumPowerForEF = sumPowerForEF;
+        _validEffortCount = validEffortCount;
 
         // Compute Actual 3-Min Averages
         // Pacing (VI) uses the full time window
@@ -277,7 +296,7 @@ class TrendEngine {
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTQ = actualTQ;
-
+            
             if (methodBlockCompleted != null) {
                 methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
@@ -285,11 +304,22 @@ class TrendEngine {
 
         // Set The Baseline Anchor: Once the rider completes their initial baseline window 
         // (usually after the first 10 to 15 minutes of steady riding),         
-        if (!initialEFlocked && (setInitialEF || elapsedSeconds >= initialEFSeconds)) {
+        if (!initialEFlocked && hasFirstBaseline && (setInitialEF || activitySeconds >= initialEFSeconds)) {
             System.println("Locking initial trend snapshot based on lap key press");
             setInitialEF = false;
             initialEFlocked = true;
+            
             initialEF = actualEF;
+
+            System.println("LOCKING TREND SNAPSHOT");
+            lockedEF = actualEF;
+            lockedVI = actualVI;
+            lockedTQ = actualTQ;
+
+            elapsedSeconds = 0; // Reset the block timer to give them a full lock window after manual lock
+            if (methodBlockCompleted != null) {
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
+            }
         }
 
         // 5. EVALUATE TRENDS (Compare Actual vs Locked)

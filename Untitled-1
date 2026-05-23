@@ -1,0 +1,62 @@
+   
+class LowMemoryTrendEngine {
+    // Zero arrays! Just simple numeric registers.
+    private var _smoothedPower = 0.0;
+    private var _smoothedHR = 0.0;
+    private var _smoothedTQ = 0.0;
+    private var _samplesCount = 0;
+
+    function updateMetricsLowMem(rawPower, rawHR, rawTorque, targetWindowSec) {
+        if (_samplesCount < targetWindowSec) {
+            _samplesCount++;
+        }
+
+        // Use an Exponential Moving Average (EMA) alpha weight
+        // This mirrors a rolling window perfectly with ZERO array storage overhead!
+        var alpha = 2.0 / (_samplesCount + 1.0);
+
+        _smoothedPower = (_smoothedPower * (1.0 - alpha)) + ((rawPower != null ? rawPower : 0) * alpha);
+        _smoothedHR    = (_smoothedHR * (1.0 - alpha)) + ((rawHR != null ? rawHR : 0) * alpha);
+        _smoothedTQ    = (_smoothedTQ * (1.0 - alpha)) + ((rawTorque != null ? rawTorque : 0.0) * alpha);
+
+        // Your outputs are immediately ready and perfectly smooth
+        actualPower = _smoothedPower;
+        actualHR    = _smoothedHR;
+        actualTQ    = _smoothedTQ;
+        actualEF    = actualHR > 0 ? actualPower / actualHR : 0.0;
+    }
+}
+
+
+debug anders
+
+
+When you pack 20 lines of string building into a function that fires every single second, 
+you create a massive pile of temporary memory garbage faster than the background garbage collector can free it. The memory usage climbs higher and higher until the engine eventually chokes.
+
+function drawDebugInfo(dc as Dc) as Void {
+    var color = getThemeColor(mDarkBackground);
+    dc.setColor(color[:text], Graphics.COLOR_TRANSPARENT);
+
+    var font = Graphics.FONT_SYSTEM_TINY;
+    var fontHeight = dc.getFontHeight(font);
+    
+    var xPos = dc.getWidth() / 2;
+    var yPos = 10; 
+    var justify = Graphics.TEXT_JUSTIFY_CENTER;
+
+    // NO "text += ..." object pooling here!
+    // Simply format inline and pass directly to the screen framework layer:
+    dc.drawText(xPos, yPos, font, "--- ACTUALS (EF | VI | TQ) ---", justify); 
+    yPos += fontHeight;
+
+    dc.drawText(xPos, yPos, font, 
+        "EF: " + mCycloData.ActualEF.format("%.2f") + 
+        " | VI: " + mCycloData.ActualVI.format("%.2f") + 
+        " | TQ: " + mCycloData.ActualTQ.format("%.1f") + "Nm", 
+        justify
+    ); 
+    yPos += fontHeight + 4;
+
+    // Do the exact same thing for the remaining blocks...
+}

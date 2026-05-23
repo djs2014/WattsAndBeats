@@ -1,20 +1,24 @@
 sync field_utils
 
-alarm werkt?
-xchange backgr on alert
-xoption  white/black text red / yellow /orange alert
-
-EF warning klopt het?
-font groter bij pauze op groter veld?
-
-xaantal sec eerste lock - default 180 sec
-xon lap eerste keer set eerste lock
-xon lap manual hide -> werkt niet
+crash on pause screen
+initial EF -> set lock ook en start
+debug memory
+debug on, show only on big screen extra! memory issue text stuff
+alarm werkt? / playtone?
 
 
-xcheck the use of critical/high/warning colors
-debug on, show only on big screen extra!
-todo show demo phase
+x on lap manual hide -> werkt niet?
+readme: demo -> set smooth window to 20?
+firstBlockEF == initialEF
+
+show progress bar tiny option on next lock
+
+x change backgr on alert
+x option  white/black text red / yellow /orange alert
+x aantal sec eerste lock - default 180 sec
+x on lap eerste keer set eerste lock
+
+
 
 settings: warning / show progressbar until warning reached.
 -> max duration EF warning (default 5min is max)
@@ -26,7 +30,6 @@ setting: on lap key: lock new baseline (after x sec)
 
     Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
 
-show progress bar tiny option on next lock
 
 
 update readme
@@ -76,123 +79,10 @@ if (actualVI > maxRollingVI) {
 }
 ---
 
-function drawColumnLayout(dc, width, height) {
-    // Define our X positions for the 3 columns
-    var col1X = (width * 0.18).toNumber();
-    var col2X = (width * 0.50).toNumber();
-    var col3X = (width * 0.82).toNumber();
-
-    // Define our standard Y baselines for perfect horizontal alignment
-    var headerY    = (height * 0.12).toNumber();
-    var actualsY   = (height * 0.38).toNumber();
-    var baselinesY = (height * 0.70).toNumber();
-
-    // Cache fonts to keep the draw text lines cleaner
-    var fTiny   = Graphics.FONT_TINY;
-    var fSmall  = Graphics.FONT_SMALL;
-    var fLarge  = Graphics.FONT_LARGE;
-    var jCenter = Graphics.TEXT_JUSTIFY_CENTER;
-
-    // --- STEP 1: DRAW HEADERS (Labels) ---
-    dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(col1X, headerY, fSmall, "EF", jCenter);
-    dc.drawText(col2X, headerY, fSmall, "VI", jCenter);
-    dc.drawText(col3X, headerY, fSmall, "TQ", jCenter);
-
-    // --- STEP 2: DRAW DOCK DIVIDER LINES ---
-    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.setPenWidth(1);
-    // Horizontal rule under headers
-    dc.drawLine(width * 0.05, actualsY - 5, width * 0.95, actualsY - 5);
-    // Vertical column separation grids
-    dc.drawLine((width * 0.34).toNumber(), headerY, (width * 0.34).toNumber(), height * 0.85);
-    dc.drawLine((width * 0.66).toNumber(), headerY, (width * 0.66).toNumber(), height * 0.85);
-
-    // --- STEP 3: DRAW LIVE MOVING ACTUALS ---
-    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(col1X, actualsY, fLarge, actualEF.format("%.2f"), jCenter);
-    dc.drawText(col2X, actualsY, fLarge, actualVI.format("%.2f"), jCenter);
-    dc.drawText(col3X, actualsY, fLarge, actualTQ.format("%.1f"), jCenter);
-
-    // --- STEP 4: DRAW LOCKED BASELINES & TREND ALERTS ---
-    
-    // Column 1: EF Baseline + Trend Arrow
-    setTrendColor(dc, trendEF); 
-    dc.drawText(col1X, baselinesY, fTiny, lockedEF.format("%.2f") + " " + getTrendArrow(trendEF), jCenter);
-
-    // Column 2: VI Baseline + Trend Arrow
-    setTrendColor(dc, trendVI);
-    dc.drawText(col2X, baselinesY, fTiny, lockedVI.format("%.2f") + " " + getTrendArrow(trendVI), jCenter);
-
-    // Column 3: Torque Baseline + Trend Arrow
-    setTrendColor(dc, trendTQ);
-    dc.drawText(col3X, baselinesY, fTiny, lockedTorque.format("%.1f") + " " + getTrendArrow(trendTQ), jCenter);
-}
-
-function drawPauseLayout(dc, width, height) {
-    dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-    dc.clear();
-
-    var colLabel   = (width * 0.12).toNumber();
-    var colAvg     = (width * 0.50).toNumber();
-    var colPeak    = (width * 0.88).toNumber();
-    
-    var titleY     = (height * 0.10).toNumber();
-    var startY     = (height * 0.35).toNumber();
-    var rowSpacing = (height * 0.20).toNumber();
-
-    var fXTiny  = Graphics.FONT_XTINY;
-    var fSmall  = Graphics.FONT_SMALL;
-    var jLeft   = Graphics.TEXT_JUSTIFY_LEFT;
-    var jRight  = Graphics.TEXT_JUSTIFY_RIGHT;
-    var jCenter = Graphics.TEXT_JUSTIFY_CENTER;
-
-    // Title Banner
-    dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(width / 2, titleY, fSmall, "RIDE SUMMARY (PAUSED)", jCenter);
-
-    // Sub-headers
-    dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(colAvg, startY - 20, fXTiny, "AVG", jRight);
-    dc.drawText(colPeak, startY - 20, fXTiny, "MAX/PK", jRight);
-
-    // Divider
-    dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.drawLine(width * 0.05, startY - 5, width * 0.95, startY - 5);
-
-    // ROW 1: EF
-    var y = startY;
-    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(colLabel, y, fSmall, "EF", jLeft);
-    dc.drawText(colAvg, y, fSmall, actualEF.format("%.2f"), jRight); 
-    dc.drawText(colPeak, y, fSmall, peakRollingEF.format("%.2f"), jRight);
-
-    // ROW 2: VI
-    y += rowSpacing;
-    var sessionVI = "1.00";
-    var activityInfo = Activity.getActivityInfo();
-    if (activityInfo != null && activityInfo.averagePower != null && activityInfo.averagePower > 0) {
-        sessionVI = (globalNP / activityInfo.averagePower).format("%.2f");
-    }
-    dc.drawText(colLabel, y, fSmall, "VI", jLeft);
-    dc.drawText(colAvg, y, fSmall, sessionVI, jRight);
-    dc.drawText(colPeak, y, fSmall, maxRollingVI.format("%.2f"), jRight);
-
-    // ROW 3: Torque
-    y += rowSpacing;
-    dc.drawText(colLabel, y, fSmall, "TQ", jLeft);
-    dc.drawText(colAvg, y, fSmall, actualTQ.format("%.1f") + " Nm", jRight);
-    dc.drawText(colPeak, y, fSmall, maxInstantTorque.format("%.1f"), jRight);
-}
----
-
-
 Stats:
 1. What Stats Matter Most When Paused?When a cyclist pulls over for a break or a traffic light, they don't want to look at a 3-minute rolling average. They want to check their overall macro trends for the entire ride so far:Aerobic Decoupling ($EF\text{ Drop}$): The ultimate endurance metric. Compare their very first 30-minute baseline block to their most recent completed 30-minute block. If it has dropped by $12\%$, their cardio system is heavily fatiguing.Global VI: Their pacing score for the whole ride.Average Torque: The total muscular work done per pedal stroke across the ride.
 
 Tracking the First and Last Blocks in Code
-
-To calculate the overall $EF$ drop, your compute logic needs to remember the very first baseline established at minute 3, and constantly update a variable with the most recent baseline.Add these tracking variables at the class level:
 
 var firstBlockEF = 0.0;
 var latestBlockEF = 0.0;

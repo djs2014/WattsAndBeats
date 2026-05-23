@@ -172,18 +172,6 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
         )
       );
 
-      // When pressed the lap key
-      boolean = $.getStorageValue("beep_onlap", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "On lap (beep)",
-          null,
-          "beep_onlap",
-          boolean,
-          null
-        )
-      );
-
       boolean = $.getStorageValue("beep_onlock", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
