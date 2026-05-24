@@ -193,16 +193,6 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
-      boolean = $.getStorageValue("toast_onEFwarning", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "EF warning (toast)",
-          null,
-          "toast_onEFwarning",
-          boolean,
-          null
-        )
-      );
       boolean = $.getStorageValue("beep_onVIwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
@@ -213,22 +203,32 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
-      boolean = $.getStorageValue("toast_onVIwarning", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "VI warning (toast)",
-          null,
-          "toast_onVIwarning",
-          boolean,
-          null
-        )
-      );
       boolean = $.getStorageValue("beep_onTQwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
           "TQ warning (beep)",
           null,
           "beep_onTQwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("toast_onEFwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "EF warning (toast)",
+          null,
+          "toast_onEFwarning",
+          boolean,
+          null
+        )
+      );
+      boolean = $.getStorageValue("toast_onVIwarning", false) as Boolean;
+      alertMenu.addItem(
+        new WatchUi.ToggleMenuItem(
+          "VI warning (toast)",
+          null,
+          "toast_onVIwarning",
           boolean,
           null
         )

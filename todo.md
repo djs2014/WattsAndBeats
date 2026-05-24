@@ -1,5 +1,9 @@
 sync field_utils
 
+FE counter max 5 min -> alert
+VI counter max x min
+TQ counter max 2 km 
+
 crash on pause screen
 initial EF -> set lock ook en start
 debug memory
