@@ -1,6 +1,6 @@
 sync field_utils
 
-FE counter max 5 min -> alert
+FE counter max 5 min -> alert canarie
 VI counter max x min
 TQ counter max 2 km 
 

@@ -23,6 +23,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mFirstBlockEF as Float = -1.0f;
     hidden var mLatestBlockEF as Float = 0.0f;
 
+    hidden var mElapsedSeconds as Number = 0;
+    hidden var mElapsedDistanceMeter as Float = 0.0f;
     hidden var mAveragePower as Number = 0;
     hidden var mAverageCadence as Number = 0;
     hidden var mCurrentPower as Number = 0;
@@ -31,10 +33,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mPreviousValidGlobalNP as Number = 0;
 
     hidden var mHeaderFont as Graphics.FontType = Graphics.FONT_MEDIUM;
-
-    hidden var mBeepOnEFWarningHandled as Boolean = false;
-    hidden var mBeepOnVIWarningHandled as Boolean = false;
-    hidden var mBeepOnTQWarningHandled as Boolean = false;
 
     hidden var mColorCritical as ColorType = Graphics.COLOR_RED;
     hidden var mColorHigh as ColorType = Graphics.COLOR_YELLOW;
@@ -106,6 +104,11 @@ class WattsAndBeatsView extends WatchUi.DataField {
             }
         }
 
+        mElapsedSeconds =
+            ($.getActivityValue(info, :timerTime, 0) as Number) / 1000; // Convert to seconds
+        mElapsedDistanceMeter =
+            $.getActivityValue(info, :elapsedDistance, 0.0f) as Float;
+
         mCurrentPower = $.getActivityValue(info, :currentPower, 0) as Number;
         mCurrentHeartRate =
             $.getActivityValue(info, :currentHeartRate, 0) as Number;
@@ -131,7 +134,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
         } else if (!mPaused) {
             processTrendEngine(info);
         }
-        processTrendEngineWarnings();
+        if (!mPaused) {
+            evaluateAlertEscalations(info);
+        }
     }
 
     // TODO
@@ -237,63 +242,6 @@ class WattsAndBeatsView extends WatchUi.DataField {
         mCycloData.BufferSize = mTrendEngine.getBufferSize();
     }
 
-    function processTrendEngineWarnings() as Void {
-        var trendEF = mCycloData.TrendEF;
-        var trendVI = mCycloData.TrendVI;
-        var trendTQ = mCycloData.TrendTQ;
-        var hasWarning = trendEF == -1 || trendVI == -1 || trendTQ == -1;
-
-        // Reset handled state if trend is no longer in warning state
-        if (trendEF != -1 && mBeepOnEFWarningHandled) {
-            mBeepOnEFWarningHandled = false;
-        }
-        if (trendVI != -1 && mBeepOnVIWarningHandled) {
-            mBeepOnVIWarningHandled = false;
-        }
-        if (trendTQ != -1 && mBeepOnTQWarningHandled) {
-            mBeepOnTQWarningHandled = false;
-        }
-
-        if (!hasWarning) {
-            return;
-        }
-        // There is a warning
-        if ($.gBacklightOnAlert) {
-            backlightOnAlert();
-        }
-
-        // Prio EF over Torque over Vi
-        if (trendEF == -1 and !mBeepOnEFWarningHandled) {
-            if ($.gBeepOnEFWarning) {
-                alertOnEvent(Attention.TONE_LOUD_BEEP);
-            }
-            if ($.gToastOnEFWarning) {
-                toastOnEvent("Aerobic decoupling! (EF)");
-            }
-            mBeepOnEFWarningHandled = true;
-        } else if (
-            $.gBeepOnTQWarning and
-            trendTQ == -1 and
-            !mBeepOnTQWarningHandled
-        ) {
-            if ($.gBeepOnTQWarning) {
-                alertOnEvent(Attention.TONE_LOUD_BEEP);
-            }
-            if ($.gToastOnTQWarning) {
-                toastOnEvent("Torque Warning! (TQ)");
-            }
-            mBeepOnTQWarningHandled = true;
-        } else if (trendVI == -1 and !mBeepOnVIWarningHandled) {
-            if ($.gBeepOnVIWarning) {
-                alertOnEvent(Attention.TONE_LOUD_BEEP);
-            }
-            if ($.gToastOnVIWarning) {
-                toastOnEvent("Pacing! (VI)");
-            }
-            mBeepOnVIWarningHandled = true;
-        }
-    }
-
     // Display the value you computed here. This will be called
     // once a second when the data field is visible.
     function onUpdate(dc as Dc) as Void {
@@ -340,6 +288,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
             drawTrendsInColumns(dc);
         } else {
             drawTrendsInRows(dc);
+        }
+        if (!mPaused) {
+            drawSafeZoneProgressBar(dc);
         }
     }
 
@@ -473,7 +424,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 jRight
             ); // Historical anchor baseline
         }
-        dc.drawText(colPeak, y, fSmall, actualEF.format("%.2f"), jRight); // Current performance point
+        dc.drawText(colPeak, y, fSmall, maxRollingEF.format("%.2f"), jRight); // Current performance point
 
         dc.setColor(efStatus[:color], Graphics.COLOR_TRANSPARENT);
         dc.drawText(colDesc, y, fXTiny, efStatus[:text], jLeft);
@@ -1339,7 +1290,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 $.getLongTimeString(
                     new Time.Moment(mCycloData.BlockCompleted)
                 ) +
-                " | Next Lock In: " +
+                " | Next In: " +
                 $.secondsToHourMinutesSeconds(
                     mTrendEngine.getSecondsToNextLock()
                 ),
@@ -1351,8 +1302,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
             xPos,
             yPos,
             font,
-            "Init EF after " +
-                $.secondsToHourMinutesSeconds(mTrendEngine.getInitialEFSec()),
+            "Init EF on " +
+                $.secondsToHourMinutesSeconds(
+                    mTrendEngine.getInitialEFlockedAt()
+                ),
             justify
         );
         yPos += fontHeight;
@@ -1821,6 +1774,161 @@ class WattsAndBeatsView extends WatchUi.DataField {
             (height * 0.02).toNumber(),
             Graphics.FONT_XTINY,
             countdownStr,
+            Graphics.TEXT_JUSTIFY_CENTER
+        );
+    }
+
+    // Set your threshold limits (e.g., 3 minutes = 180 seconds)
+    const ESCALATION_THRESHOLD_SEC = 180; // TODO setting
+
+    hidden var mEfWarningSeconds as Number = 0;
+    hidden var mViWarningSeconds as Number = 0;
+    hidden var mTqWarningSeconds as Number = 0;
+
+    function evaluateAlertEscalations(info as Activity.Info) as Void {
+        var trendEF = mCycloData.TrendEF;
+        var trendVI = mCycloData.TrendVI;
+        var trendTQ = mCycloData.TrendTQ;
+
+        if (
+            $.gBacklightOnAlert &&
+            (trendEF == -1 || trendVI == -1 || trendTQ == -1)
+        ) {
+            backlightOnAlert();
+        }
+
+        if (!(Attention has :playTone && System.getDeviceSettings().tonesOn)) {
+            return;
+        }
+
+        // 2. THE URBAN GATE: Check if we are still in the start-of-ride window
+        var elapsedSec =
+            ($.getActivityValue(info, :timerTime, 0) as Number) / 1000; // Convert to seconds
+        var elapsedDistanceMeter =
+            $.getActivityValue(info, :elapsedDistance, 0.0f) as Float;
+
+        if (
+            elapsedSec < $.gUrbanGateTimeSec &&
+            elapsedDistanceMeter < $.gUrbanGateDistanceMeter
+        ) {
+            System.println(
+                "Within Urban Gate window: " +
+                    elapsedSec.format("%.1f") +
+                    "s, " +
+                    elapsedDistanceMeter.format("%.1f") +
+                    "m. No alerts will sound."
+            );
+            // Reset our warning accumulators so they don't build up background time
+            mEfWarningSeconds = 0;
+            mViWarningSeconds = 0;
+            mTqWarningSeconds = 0;
+            return; // Exit the function early without making a sound
+        }
+
+        // 1. EVALUATE EFFICIENCY FACTOR (EF)
+        if (trendEF == -1) {
+            // Replace with your actual boolean check
+            mEfWarningSeconds++;
+            if (mEfWarningSeconds == 1) {
+                Attention.playTone(Attention.TONE_LOUD_BEEP); // Soft initial warning
+            } else if (
+                $.gEFWarningThresholdSec > 0 &&
+                mEfWarningSeconds >= $.gEFWarningThresholdSec &&
+                mEfWarningSeconds % 60 == 0
+            ) {
+                Attention.playTone(Attention.TONE_CANARY); // Piercing escalation every minute after limit
+            }
+        } else {
+            mEfWarningSeconds = 0; // Reset instantly if they fix their pace/hydration
+        }
+
+        // 2. EVALUATE VARIABILITY INDEX (VI)
+        if (trendVI == -1) {
+            mViWarningSeconds++;
+            if (mViWarningSeconds == 1) {
+                Attention.playTone(Attention.TONE_LOUD_BEEP);
+            } else if (
+                $.gVIWarningThresholdSec > 0 &&
+                mViWarningSeconds >= $.gVIWarningThresholdSec &&
+                mViWarningSeconds % 60 == 0
+            ) {
+                Attention.playTone(Attention.TONE_CANARY);
+            }
+        } else {
+            mViWarningSeconds = 0;
+        }
+
+        // 3. EVALUATE TORQUE (TQ)
+        if (trendTQ == -1) {
+            mTqWarningSeconds++;
+            if (mTqWarningSeconds == 1) {
+                Attention.playTone(Attention.TONE_LOUD_BEEP);
+            } else if (
+                $.gTQWarningThresholdSec > 0 &&
+                mTqWarningSeconds >= $.gTQWarningThresholdSec &&
+                mTqWarningSeconds % 60 == 0
+            ) {
+                Attention.playTone(Attention.TONE_CANARY);
+            }
+        } else {
+            mTqWarningSeconds = 0;
+        }
+    }
+
+    function drawSafeZoneProgressBar(dc as Dc) as Void {
+        var elapsedSec = mElapsedSeconds;
+        var elapsedDist = mElapsedDistanceMeter;
+
+        // 1. Get settings values (handling conversions)
+        var targetTime = $.gUrbanGateTimeSec;
+        var targetDist = $.gUrbanGateDistanceMeter;
+
+        // 2. Guard: If ANY gates are breached, the safe zone is over. Draw nothing!
+        if (elapsedSec >= targetTime || elapsedDist >= targetDist) {
+            return;
+        }
+
+        // 3. Calculate percentages for both gates (capped between 0.0 and 1.0)
+        var timeProgress =
+            targetTime > 0 ? elapsedSec.toDouble() / targetTime : 1.0;
+        var distProgress =
+            targetDist > 0 ? elapsedDist.toDouble() / targetDist : 1.0;
+
+        // 4. Determine which gate is closer to opening up the alerts (the higher percentage)
+        var overallProgress =
+            timeProgress > distProgress ? timeProgress : distProgress;
+        if (overallProgress > 1.0) {
+            overallProgress = 1.0;
+        }
+
+        // 5. Layout coordinates for the bottom bar
+        var screenWidth = dc.getWidth();
+        var screenHeight = dc.getHeight();
+        var barHeight = 22; // Compact but highly readable thickness
+        var barY = screenHeight - barHeight - 4; // Positioned just above the absolute bottom bezel
+        var barWidth = (screenWidth * 0.8).toNumber(); // Center the bar at 80% screen width
+        var barX = (screenWidth - barWidth) / 2;
+
+        // 6. DRAW THE BOUNDING BOX (Background)
+        var color = getThemeColor(mDarkBackground);
+        dc.setColor(color[:strong], Graphics.COLOR_TRANSPARENT);
+        dc.fillRectangle(barX, barY, barWidth, barHeight);
+
+        // 7. DRAW THE PROGRESS FILL (Shrinks or fills based on choice. Let's make it a filling bar)
+        var fillWidth = (barWidth * overallProgress).toNumber();
+        if (fillWidth > 0) {
+            dc.setColor(mColorWarning, Graphics.COLOR_TRANSPARENT);
+            dc.fillRectangle(barX + 1, barY + 1, fillWidth - 2, barHeight - 2);
+        }
+
+        // 8. OVERLAY THE TEXT
+        // Calculate countdown value to display (e.g., remaining percentage or just simple text)
+        dc.setColor(color[:background], Graphics.COLOR_TRANSPARENT);
+        dc.drawText(
+            screenWidth / 2,
+            barY + 1,
+            Graphics.FONT_XTINY,
+            "Active in " + ((1.0 - overallProgress) * 100).toNumber() + "%",
             Graphics.TEXT_JUSTIFY_CENTER
         );
     }

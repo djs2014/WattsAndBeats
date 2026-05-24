@@ -32,6 +32,13 @@ class WattsAndBeatsApp extends Application.AppBase {
     }
 
     function onSettingsChanged() {
+        if ($.getStorageValue("Urban_gate_distance_m", null) == null) {
+            $.StorageSetValue("Urban_gate_distance_m", 5000);
+            $.StorageSetValue("Urban_gate_time_sec", 900);
+            $.StorageSetValue("EF_warning_threshold_sec", 300); // 5 minutes
+            $.StorageSetValue("VI_warning_threshold_sec", 300); // 5 minutes
+            $.StorageSetValue("TQ_warning_threshold_sec", 600); // 10 minutes
+        }
         var reset = $.getStorageValue("resetDefaults", null);
         if (reset == null || (reset as Boolean)) {
             $.StorageSetValue("resetDefaults", false);
@@ -42,15 +49,20 @@ class WattsAndBeatsApp extends Application.AppBase {
 
             $.StorageSetValue("demoMode", false);
             $.StorageSetValue("debugMode", false);
-            $.StorageSetValue("lock_onlapkey", false);
+            // $.StorageSetValue("lock_onlapkey", false);
             $.StorageSetValue("lock_onautolap", true);
             $.StorageSetValue("beep_onlock", false);
-            $.StorageSetValue("beep_onEFwarning", false);
-            $.StorageSetValue("beep_onVIwarning", false);
-            $.StorageSetValue("beep_onTQwarning", false);
-            $.StorageSetValue("toast_onEFwarning", false);
-            $.StorageSetValue("toast_onVIwarning", false);
-            $.StorageSetValue("toast_onTQwarning", false);
+
+            $.StorageSetValue("Urban_gate_distance_m", 5000);
+            $.StorageSetValue("Urban_gate_time_sec", 900);
+
+            $.StorageSetValue("beep_onEFwarning", true);
+            $.StorageSetValue("beep_onVIwarning", true);
+            $.StorageSetValue("beep_onTQwarning", true);
+            $.StorageSetValue("EF_warning_threshold_sec", 300); // 5 minutes
+            $.StorageSetValue("VI_warning_threshold_sec", 300); // 5 minutes
+            $.StorageSetValue("TQ_warning_threshold_sec", 600); // 10 minutes
+
             $.StorageSetValue("backlight_onalert", false);
             $.StorageSetValue("background_onalert", false);
             $.StorageSetValue("text_whiteonred", true);
@@ -62,23 +74,31 @@ class WattsAndBeatsApp extends Application.AppBase {
 
         // TODO
         $.gDebug = $.getStorageValue("debugMode", false) as Boolean;
-        $.gShowPauseScreen = $.getStorageValue("showPauseScreen", true) as Boolean;
+        $.gShowPauseScreen =
+            $.getStorageValue("showPauseScreen", true) as Boolean;
 
         // TODO $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
         $.gLockOnAutoLap = $.getStorageValue("lock_onautolap", true) as Boolean;
         $.gBeepOnLock = $.getStorageValue("beep_onlock", false) as Boolean;
+
+        $.gUrbanGateDistanceMeter =
+            $.getStorageValue("Urban_gate_distance_m", 5000) as Number;
+        $.gUrbanGateTimeSec =
+            $.getStorageValue("Urban_gate_time_sec", 900) as Number;
+
         $.gBeepOnEFWarning =
             $.getStorageValue("beep_onEFwarning", false) as Boolean;
         $.gBeepOnVIWarning =
             $.getStorageValue("beep_onVIwarning", false) as Boolean;
         $.gBeepOnTQWarning =
             $.getStorageValue("beep_onTQwarning", false) as Boolean;
-        $.gToastOnEFWarning =
-            $.getStorageValue("toast_onEFwarning", false) as Boolean;
-        $.gToastOnVIWarning =
-            $.getStorageValue("toast_onVIwarning", false) as Boolean;
-        $.gToastOnTQWarning =
-            $.getStorageValue("toast_onTQwarning", false) as Boolean;
+        $.gEFWarningThresholdSec =
+            $.getStorageValue("EF_warning_threshold_sec", 300) as Number;
+        $.gVIWarningThresholdSec =
+            $.getStorageValue("VI_warning_threshold_sec", 300) as Number;
+        $.gTQWarningThresholdSec =
+            $.getStorageValue("TQ_warning_threshold_sec", 600) as Number;
+
         $.gBacklightOnAlert =
             $.getStorageValue("backlight_onalert", false) as Boolean;
         $.gBackgroundOnAlert =
@@ -125,6 +145,7 @@ class WattsAndBeatsApp extends Application.AppBase {
             }
             trendEngine.reset();
         }
+
         if (demo) {
             // Demo will run once
             $.StorageSetValue("demoMode", false);
@@ -150,13 +171,15 @@ var gLockOnAutoLap as Boolean = true;
 var gLockIntervalSec as Number = 1800;
 var gInitialEFOnLap as Boolean = false;
 
+var gUrbanGateDistanceMeter as Number = 5000;
+var gUrbanGateTimeSec as Number = 900;
 var gBeepOnLock as Boolean = false;
 var gBeepOnEFWarning as Boolean = false;
 var gBeepOnVIWarning as Boolean = false;
 var gBeepOnTQWarning as Boolean = false;
-var gToastOnEFWarning as Boolean = false;
-var gToastOnVIWarning as Boolean = false;
-var gToastOnTQWarning as Boolean = false;
+var gEFWarningThresholdSec as Number = 300;
+var gVIWarningThresholdSec as Number = 300;
+var gTQWarningThresholdSec as Number = 600;
 var gBacklightOnAlert as Boolean = false;
 var gBackgroundOnAlert as Boolean = false;
 var gTextWhiteOnRed as Boolean = true;

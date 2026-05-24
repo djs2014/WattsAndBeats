@@ -149,6 +149,25 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       var alertMenu = new WatchUi.Menu2({ :title => "Alerts" });
 
       var boolean;
+      var mi;
+
+      mi = new WatchUi.MenuItem(
+        "Safe zone distance|0~ (meter)",
+        null,
+        "Urban_gate_distance_m",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      alertMenu.addItem(mi);
+
+      mi = new WatchUi.MenuItem(
+        "Safe zone time|0~ (sec)",
+        null,
+        "Urban_gate_time_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      alertMenu.addItem(mi);
 
       boolean = $.getStorageValue("backlight_onalert", false) as Boolean;
       alertMenu.addItem(
@@ -193,6 +212,15 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
+      mi = new WatchUi.MenuItem(
+        "Escalation threshold|0~",
+        null,
+        "EF_warning_threshold_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      alertMenu.addItem(mi);
+
       boolean = $.getStorageValue("beep_onVIwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
@@ -203,6 +231,16 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
+
+      mi = new WatchUi.MenuItem(
+        "Escalation threshold|0~",
+        null,
+        "VI_warning_threshold_sec",
+        null
+      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      alertMenu.addItem(mi);
+
       boolean = $.getStorageValue("beep_onTQwarning", false) as Boolean;
       alertMenu.addItem(
         new WatchUi.ToggleMenuItem(
@@ -213,36 +251,15 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
           null
         )
       );
-      boolean = $.getStorageValue("toast_onEFwarning", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "EF warning (toast)",
-          null,
-          "toast_onEFwarning",
-          boolean,
-          null
-        )
+
+      mi = new WatchUi.MenuItem(
+        "Escalation threshold|0~",
+        null,
+        "TQ_warning_threshold_sec",
+        null
       );
-      boolean = $.getStorageValue("toast_onVIwarning", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "VI warning (toast)",
-          null,
-          "toast_onVIwarning",
-          boolean,
-          null
-        )
-      );
-      boolean = $.getStorageValue("toast_onTQwarning", false) as Boolean;
-      alertMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "TQ warning (toast)",
-          null,
-          "toast_onTQwarning",
-          boolean,
-          null
-        )
-      );
+      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
+      alertMenu.addItem(mi);
 
       WatchUi.pushView(
         alertMenu,

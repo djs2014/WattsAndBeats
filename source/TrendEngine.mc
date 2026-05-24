@@ -19,7 +19,7 @@ class TrendEngine {
     var isBufferFull as Boolean = false;
 
     // Global elapsed seconds
-    var activitySeconds as Number = 0;    
+    var activitySeconds as Number = 0;
     // Total elapsed seconds of active riding
     var elapsedSeconds = 0;
 
@@ -29,10 +29,14 @@ class TrendEngine {
     var lockedTQ as Float = 0.0f;
     var lockNowOnLap as Boolean = false;
 
+    // When to set initialEF
     var initialEFSeconds as Number = 900; // 15 minutes
     var setInitialEF as Boolean = false;
+    //
     var initialEFlocked as Boolean = false;
     var initialEF as Float = 0.0f;
+    var initialEFlockedAt as Number = 0; // Timestamp of when the initial EF was locked
+
     // Trend Outputs (-1 = Decoupling/Failing, 0 = Steady, 1 = Improving)
     var trendEF as Number = 0;
     var trendVI as Number = 0;
@@ -53,9 +57,9 @@ class TrendEngine {
     var previousTorque as Float = 0.0f;
     var previousEF as Float = 0.0f;
 
-    function initialize() {        
+    function initialize() {
         // OH. dummy call otherwise removed by the compiler.
-        lockNow();        
+        lockNow();
     }
 
     hidden var methodBlockCompleted as Method?;
@@ -75,7 +79,7 @@ class TrendEngine {
         }
     }
 
-    // 
+    //
     function setSmoothingWindowSec(seconds as Number) as Void {
         if (seconds < 5) {
             seconds = 5;
@@ -89,7 +93,7 @@ class TrendEngine {
     }
     function setLockWindowSec(lockWindowSec as Number) as Void {
         if (lockWindowSec < buffer180) {
-            lockWindowSec = 2 *buffer180;
+            lockWindowSec = 2 * buffer180;
         }
         lockStep1800 = lockWindowSec;
     }
@@ -99,9 +103,10 @@ class TrendEngine {
         }
         initialEFSeconds = initialEFSec;
     }
-    function getInitialEFSec() as Number {
-        return initialEFSeconds;
+    function getInitialEFlockedAt() as Number {
+        return initialEFlockedAt;
     }
+    
     function getLockWindowSec() as Number {
         return lockStep1800;
     }
@@ -109,7 +114,7 @@ class TrendEngine {
     function getNormalizedPower() as Number {
         return globalNP;
     }
-            
+
     function lockInitialEF() as Boolean {
         if (!hasFirstBaseline) {
             System.println(
@@ -141,11 +146,11 @@ class TrendEngine {
 
     // Debug getters
     var _sumPowerForEF as Float = 0.0f;
-    function getSumPowerForEF() as Float {        
+    function getSumPowerForEF() as Float {
         return _sumPowerForEF;
     }
     var _validEffortCount as Number = 0;
-    function getValidEffortCount() as Number {        
+    function getValidEffortCount() as Number {
         return _validEffortCount;
     }
     var _rollingNP as Number = 0;
@@ -157,7 +162,7 @@ class TrendEngine {
     function compute(
         cadence as Number,
         power as Number,
-        heartRate as Number        
+        heartRate as Number
     ) as Array<Float or Number>? {
         // Skip TQ calculation if power is 0
         // Skip EF calculation if power is 0
@@ -165,7 +170,7 @@ class TrendEngine {
 
         // Update global NP tracking
         globalNP = calculateNormalizedPower(calculatePower30(power));
-        
+
         // 1. Calculate Instantaneous Torque (Nm)
         var currentTQ = 0.0;
         // 2 * Math.PI / 60 simplifies to a constant of roughly 0.10472
@@ -234,7 +239,8 @@ class TrendEngine {
         var actualTQ;
         var actualEF;
         // Efficiency (EF) and Mechanics (Torque) only use working seconds
-        if (validEffortCount >= smoothingWindowSec) { // was 5
+        if (validEffortCount >= smoothingWindowSec) {
+            // was 5
             // Ensure we have a tiny bit of pedaling data
             actualPower = sumPowerForEF / validEffortCount;
             actualHR = sumHRForEF / validEffortCount;
@@ -271,7 +277,7 @@ class TrendEngine {
         // Check lock now
         if (lockNowOnLap && hasFirstBaseline) {
             System.println("Manually locking trend snapshot on lap key press");
-            lockNowOnLap = false; // Reset the flag after locking            
+            lockNowOnLap = false; // Reset the flag after locking
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTQ = actualTQ;
@@ -284,7 +290,7 @@ class TrendEngine {
 
         // 4. THE 3-MINUTE (buffer full) AND 30-MINUTE LOCK TRIGGER
         if (!hasFirstBaseline && isBufferFull) {
-            hasFirstBaseline = true;            
+            hasFirstBaseline = true;
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTQ = actualTQ;
@@ -296,19 +302,25 @@ class TrendEngine {
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTQ = actualTQ;
-            
+
             if (methodBlockCompleted != null) {
                 methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
-        } 
+        }
 
-        // Set The Baseline Anchor: Once the rider completes their initial baseline window 
-        // (usually after the first 10 to 15 minutes of steady riding),         
-        if (!initialEFlocked && hasFirstBaseline && (setInitialEF || activitySeconds >= initialEFSeconds)) {
-            System.println("Locking initial trend snapshot based on lap key press");
+        // Set The Baseline Anchor: Once the rider completes their initial baseline window
+        // (usually after the first 10 to 15 minutes of steady riding),
+        if (
+            !initialEFlocked &&
+            hasFirstBaseline &&
+            (setInitialEF || activitySeconds >= initialEFSeconds)
+        ) {
+            System.println(
+                "Locking initial trend snapshot based on lap key press"
+            );
             setInitialEF = false;
             initialEFlocked = true;
-            
+            initialEFlockedAt = activitySeconds;
             initialEF = actualEF;
 
             System.println("LOCKING TREND SNAPSHOT");
@@ -385,14 +397,7 @@ class TrendEngine {
             // );
         }
 
-        return [
-            actualEF,
-            actualVI,
-            actualTQ,
-            trendEF,
-            trendVI,
-            trendTQ,
-        ];
+        return [actualEF, actualVI, actualTQ, trendEF, trendVI, trendTQ];
     }
 
     function calculateRollingVI(avgPower as Float) as Float {
@@ -501,6 +506,8 @@ class TrendEngine {
         hasFirstBaseline = false;
         elapsedSeconds = 0;
         initialEF = 0.0f;
+        initialEFlockedAt = 0;
+        initialEFlocked = false;
         lockedEF = 0.0f;
         lockedVI = 0.0f;
         lockedTQ = 0.0f;
@@ -513,25 +520,11 @@ class TrendEngine {
 
     // Normalized power
     hidden var mPowerDataPer30Sec as Array<Number> = [] as Array<Number>;
-    hidden var mAvgPowerToFourthPer30Sec as Array<Decimal> =
-        [] as Array<Decimal>;
     hidden var globalNP as Number = 0;
 
-    hidden function calculateNormalizedPower(PowerPer30 as Number) as Number {
-        if (mAvgPowerToFourthPer30Sec.size() >= 30) {
-            mAvgPowerToFourthPer30Sec = mAvgPowerToFourthPer30Sec.slice(1, 30);
-        }
-
-        mAvgPowerToFourthPer30Sec.add(Math.pow(PowerPer30, 4));
-
-        if (mAvgPowerToFourthPer30Sec.size() < 30) {
-            return 0;
-        }
-        var avg = Math.mean(
-            mAvgPowerToFourthPer30Sec as Array<Numeric>
-        ).toDouble();
-        return Math.pow(avg, 0.25).toNumber();
-    }
+    // Low-memory running registers for global NP
+    hidden var mSumPowerToFourth as Double = 0.0d;
+    hidden var mTotalNPSamples as Long = 0l;
 
     hidden function calculatePower30(power as Number) as Number {
         if (mPowerDataPer30Sec.size() >= 30) {
@@ -543,5 +536,22 @@ class TrendEngine {
             return 0;
         }
         return Math.mean(mPowerDataPer30Sec as Array<Numeric>).toNumber();
+    }
+
+    hidden function calculateNormalizedPower(PowerPer30 as Number) as Number {
+        // Only start accumulating data once our initial 30-second buffer fills up
+        if (mPowerDataPer30Sec.size() < 30) {
+            return 0;
+        }
+
+        // Add the current 30s rolling average (raised to the 4th power) to our lifetime total
+        mSumPowerToFourth += Math.pow(PowerPer30, 4);
+        mTotalNPSamples++; // Track total seconds spent calculating NP
+
+        // Calculate the mean over the ENTIRE ride duration
+        var globalAvg = mSumPowerToFourth / mTotalNPSamples;
+
+        // Return the 4th root
+        return Math.pow(globalAvg, 0.25).toNumber();
     }
 }
