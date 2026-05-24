@@ -1,26 +1,10 @@
 sync field_utils
 
-FE counter max 5 min -> alert canarie
-VI counter max x min
-TQ counter max 2 km 
-
-crash on pause screen
-initial EF -> set lock ook en start
-debug memory
-debug on, show only on big screen extra! memory issue text stuff
-alarm werkt? / playtone?
 
 
-x on lap manual hide -> werkt niet?
+
 readme: demo -> set smooth window to 20?
 firstBlockEF == initialEF
-
-show progress bar tiny option on next lock
-
-x change backgr on alert
-x option  white/black text red / yellow /orange alert
-x aantal sec eerste lock - default 180 sec
-x on lap eerste keer set eerste lock
 
 
 
@@ -198,3 +182,14 @@ if (alertState == ALERT_VI) {
         dc.drawRoundedRectangle((col2X - 32).toNumber(), (actualsY - 22).toNumber(), 64, 44, 6);
     }
 }
+
+
+# The Alert Severity Matrix
+
+Metric,Urgency Level,Danger Profile,Best Alert Color
+EF (Efficiency),🔴 CRITICAL (Red),Aerobic decoupling/bonking. A sudden drop means cardiac drift is spiking relative to output.,Graphics.COLOR_RED
+TQ (Torque),🟠 HIGH (Orange/Yellow),"Neuromuscular fatigue, chain snapping, or leg blowout from grinding too heavy a gear.",Graphics.COLOR_ORANGE(or COLOR_YELLOW)
+VI (Variability),🟡 WARNING (Yellow),"Tactical pacing error. Surging too hard on hills, but fixable over the next few minutes.",Graphics.COLOR_YELLOW
+
+Why This Hierarchy Works Physically1. EF (Efficiency Factor) = 🔴 Red AlertThe Threat: If a rider's EF collapses, they are blowing up aerobically. Their heart rate is skyrocketing while their power output is dropping.The Action: They need to back off immediately, eat carbs, and lower their core temperature. If they ignore a red EF block for more than 5 minutes, their entire ride is toast.2. TQ (Torque) = 🟠 Orange AlertThe Threat: High torque spikes mean the rider is smashing the pedals at a low cadence (grinding). This rapidly drains anaerobic glycogen stores and destroys the knee joints.The Action: They don't necessarily need to slow down, but they need to shift gears immediately to spin a higher cadence. Orange signals a mechanical/neuromuscular adjustment.3. VI (Variability Index) = 🟡 Yellow AlertThe Threat: A high VI (e.g., $> 1.05$ on a steady endurance ride) means the rider is burning matches by surging up short rollers and coasting down the other side.The Action: This is a systemic pacing warning. It takes time for VI to creep up, and it takes time to smooth it back out. Yellow tells them to "smooth out the pedal strokes over the next couple of kilometers."
+

@@ -116,7 +116,7 @@ HIGH TQ  +  HIGH VI
    CRITICAL RISK: Rapidly destroying leg muscles out of corners or on rollers.
    ACTION: Anticipate the terrain! Shift to an easier gear BEFORE the slope hits.
 
-The Golden Rule for Your App:
+The Golden Rule:
 
     High VI means you are fighting the terrain incorrectly.
 
@@ -126,24 +126,52 @@ The Golden Rule for Your App:
 
 
 
-
-
-
-
-
-
-
-
-
-# The Alert Severity Matrix
-
-Metric,Urgency Level,Danger Profile,Best Alert Color
-EF (Efficiency),🔴 CRITICAL (Red),Aerobic decoupling/bonking. A sudden drop means cardiac drift is spiking relative to output.,Graphics.COLOR_RED
-TQ (Torque),🟠 HIGH (Orange/Yellow),"Neuromuscular fatigue, chain snapping, or leg blowout from grinding too heavy a gear.",Graphics.COLOR_ORANGE(or COLOR_YELLOW)
-VI (Variability),🟡 WARNING (Yellow),"Tactical pacing error. Surging too hard on hills, but fixable over the next few minutes.",Graphics.COLOR_YELLOW
-
-Why This Hierarchy Works Physically1. EF (Efficiency Factor) = 🔴 Red AlertThe Threat: If a rider's EF collapses, they are blowing up aerobically. Their heart rate is skyrocketing while their power output is dropping.The Action: They need to back off immediately, eat carbs, and lower their core temperature. If they ignore a red EF block for more than 5 minutes, their entire ride is toast.2. TQ (Torque) = 🟠 Orange AlertThe Threat: High torque spikes mean the rider is smashing the pedals at a low cadence (grinding). This rapidly drains anaerobic glycogen stores and destroys the knee joints.The Action: They don't necessarily need to slow down, but they need to shift gears immediately to spin a higher cadence. Orange signals a mechanical/neuromuscular adjustment.3. VI (Variability Index) = 🟡 Yellow AlertThe Threat: A high VI (e.g., $> 1.05$ on a steady endurance ride) means the rider is burning matches by surging up short rollers and coasting down the other side.The Action: This is a systemic pacing warning. It takes time for VI to creep up, and it takes time to smooth it back out. Yellow tells them to "smooth out the pedal strokes over the next couple of kilometers."
-
-
 # Settings
-Start activity will reset
+
+Demo: Enable demo mode and then start activity to see demo of 6 minutes.
+First 3 minutes is base, then some alerts are showing.
+
+Debug: When enabled, on datascreen with one field it will display a lot of data.
+
+Show pause screen: When enabled, on pause show some metrics.
+
+Reset: Set default values.
+
+## Alerts
+
+Safe zone distance: 5000 meter
+Safe zone time: 900 seconds
+
+Alerts (sound) will be enabled when 5000 meter or 900 seconds is reach.
+
+Backlight on: Enable backlight on alert.
+
+Change background: Set backgrount to black/white on alert.
+
+On lock: When new datset (EF/VI/TQ) is locked for comparison.
+
+EF / VI / TQ warning settings:
+
+EF warning: At start of Efficiency Factor (EF) alert 'Attention.TONE_LOUD_BEEP' is played.
+Escalation threshold: 300 seconds. After 5 minutes another warning 'Attention.TONE_CANARY' to alert. And then every minute, until no EF alert.
+
+Same can be enabled for VI and TQ.
+
+## Lock data
+
+Lock interval seconds: 1800 seconds. Interval for locking actual EF/VI/TQ data.
+
+Smoothing window: In seconds. 
+
+Initial EF at: Set the initial EF value in seconds.
+
+Initial EF on 1st lap: Set initial EF when lap button pressed.
+
+Lock on auto lap: Set new lock values when lap button pressed. 
+
+
+## Colors
+
+Warnings have a Red, Orange or Yellow background. Choose to use black or white text on them.
+
+

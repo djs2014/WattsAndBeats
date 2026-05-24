@@ -43,7 +43,7 @@ class WattsAndBeatsApp extends Application.AppBase {
         if (reset == null || (reset as Boolean)) {
             $.StorageSetValue("resetDefaults", false);
             $.StorageSetValue("lock_interval_sec", 1800);
-            $.StorageSetValue("smoothing_window_sec", 30);
+            $.StorageSetValue("smoothing_window_sec", 20);
             $.StorageSetValue("initial_ef_sec", 900);
             $.StorageSetValue("initial_ef_on_lap", false);
 
@@ -123,7 +123,7 @@ class WattsAndBeatsApp extends Application.AppBase {
         }
 
         var smoothingWindowSec =
-            $.getStorageValue("smoothing_window_sec", 30) as Number;
+            $.getStorageValue("smoothing_window_sec", 20) as Number;
         trendEngine.setSmoothingWindowSec(smoothingWindowSec);
         var actualSmoothingWindowSec = trendEngine.getSmoothingWindowSec();
         if (actualSmoothingWindowSec != smoothingWindowSec) {

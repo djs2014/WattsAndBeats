@@ -213,7 +213,7 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
         )
       );
       mi = new WatchUi.MenuItem(
-        "Escalation threshold|0~",
+        "Escalation threshold|0~ (sec)",
         null,
         "EF_warning_threshold_sec",
         null
@@ -233,7 +233,7 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       );
 
       mi = new WatchUi.MenuItem(
-        "Escalation threshold|0~",
+        "Escalation threshold|0~ (sec)",
         null,
         "VI_warning_threshold_sec",
         null
@@ -253,7 +253,7 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
       );
 
       mi = new WatchUi.MenuItem(
-        "Escalation threshold|0~",
+        "Escalation threshold|0~ (sec)",
         null,
         "TQ_warning_threshold_sec",
         null

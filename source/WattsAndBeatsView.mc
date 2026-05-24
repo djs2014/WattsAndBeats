@@ -1826,7 +1826,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
 
         // 1. EVALUATE EFFICIENCY FACTOR (EF)
-        if (trendEF == -1) {
+        if (trendEF == -1 && $.gBeepOnEFWarning) {
             // Replace with your actual boolean check
             mEfWarningSeconds++;
             if (mEfWarningSeconds == 1) {
@@ -1843,7 +1843,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
 
         // 2. EVALUATE VARIABILITY INDEX (VI)
-        if (trendVI == -1) {
+        if (trendVI == -1 && $.gBeepOnVIWarning) {
             mViWarningSeconds++;
             if (mViWarningSeconds == 1) {
                 Attention.playTone(Attention.TONE_LOUD_BEEP);
@@ -1859,7 +1859,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         }
 
         // 3. EVALUATE TORQUE (TQ)
-        if (trendTQ == -1) {
+        if (trendTQ == -1 && $.gBeepOnTQWarning) {
             mTqWarningSeconds++;
             if (mTqWarningSeconds == 1) {
                 Attention.playTone(Attention.TONE_LOUD_BEEP);
