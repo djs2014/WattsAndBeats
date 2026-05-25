@@ -530,7 +530,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             } else {
                 dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             }
-        } else {
+        } else if (mActivityStarted){
             dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
             // Get progress until next block as a time
             infoMessage =
@@ -539,6 +539,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 $.secondsToHourMinutesSeconds(
                     mTrendEngine.getSecondsToNextLock()
                 );
+        } else {
+            // Activity not started, show a generic message
+            dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
+            infoMessage = "WATTS AND BEATS";
         }
 
         var fontInfoMessage = Graphics.FONT_XTINY;
