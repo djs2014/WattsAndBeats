@@ -6,6 +6,9 @@ import Toybox.UserProfile;
 class TrendEngine {
     var buffer180 as Number = 180; // 3 minutes
     var lockStep1800 as Number = 1800; // 30 minutes in seconds
+    // Rolling average window for EF and Torque calculations (in seconds)
+    var smoothingWindowSec as Number = 30; // 30-second blocks for rolling average calculations
+
     var hasFirstBaseline = false;
 
     var powerHistory as Array<Number> = new [buffer180];
@@ -15,18 +18,34 @@ class TrendEngine {
 
     var isBufferFull as Boolean = false;
 
+    // Global elapsed seconds
+    var activitySeconds as Number = 0;
     // Total elapsed seconds of active riding
     var elapsedSeconds = 0;
 
     // Locked Snapshots (from the previous 30-minute block)
     var lockedEF as Float = 0.0f;
     var lockedVI as Float = 0.0f;
-    var lockedTorque as Float = 0.0f;
+    var lockedTQ as Float = 0.0f;
+    var lockNowOnLap as Boolean = false;
+
+    // When to set initialEF
+    var initialEFSeconds as Number = 900; // 15 minutes
+    var setInitialEF as Boolean = false;
+    //
+    var initialEFlocked as Boolean = false;
+    var initialEF as Float = 0.0f;
+    var initialEFlockedAt as Number = 0; // Timestamp of when the initial EF was locked
 
     // Trend Outputs (-1 = Decoupling/Failing, 0 = Steady, 1 = Improving)
     var trendEF as Number = 0;
     var trendVI as Number = 0;
-    var trendTorque as Number = 0;
+    var trendTQ as Number = 0;
+
+    // Peak and Max tracking variables
+    var maxInstantTorque = 0.0f;
+    var peakRollingEF = 0.0f;
+    var maxRollingVI = 0.0f; // Captures their most chaotic 3-minute surging window
 
     var useDemoData as Boolean = false;
 
@@ -39,7 +58,8 @@ class TrendEngine {
     var previousEF as Float = 0.0f;
 
     function initialize() {
-        AppBase.initialize();
+        // OH. dummy call otherwise removed by the compiler.
+        lockNow();
     }
 
     hidden var methodBlockCompleted as Method?;
@@ -57,14 +77,85 @@ class TrendEngine {
         if (isDemo) {
             lockStep1800 = 180;
         }
-        reset();
+    }
+
+    //
+    function setSmoothingWindowSec(seconds as Number) as Void {
+        if (seconds < 5) {
+            seconds = 5;
+        } else if (seconds > 60) {
+            seconds = 60;
+        }
+        smoothingWindowSec = seconds;
+    }
+    function getSmoothingWindowSec() as Number {
+        return smoothingWindowSec;
     }
     function setLockWindowSec(lockWindowSec as Number) as Void {
+        if (lockWindowSec < buffer180) {
+            lockWindowSec = 2 * buffer180;
+        }
         lockStep1800 = lockWindowSec;
     }
-  
+    function setInitialEFSec(initialEFSec as Number) as Void {
+        if (initialEFSec < buffer180) {
+            initialEFSec = buffer180;
+        }
+        initialEFSeconds = initialEFSec;
+    }
+    function getInitialEFlockedAt() as Number {
+        return initialEFlockedAt;
+    }
+    
+    function getLockWindowSec() as Number {
+        return lockStep1800;
+    }
+
     function getNormalizedPower() as Number {
         return globalNP;
+    }
+
+    function lockInitialEF() as Boolean {
+        if (!hasFirstBaseline) {
+            System.println(
+                "Cannot manually lock initial trend snapshot before first baseline is established"
+            );
+            return false;
+        }
+        if (initialEFlocked) {
+            System.println(
+                "Initial trend snapshot has already been locked, cannot lock again"
+            );
+            return false;
+        }
+        setInitialEF = true;
+        return true;
+    }
+    function lockNow() as Boolean {
+        if (!hasFirstBaseline) {
+            System.println(
+                "Cannot manually lock trend snapshot before first baseline is established"
+            );
+            return false;
+        }
+
+        System.println("Manually locking trend snapshot");
+        lockNowOnLap = true;
+        return true;
+    }
+
+    // Debug getters
+    var _sumPowerForEF as Float = 0.0f;
+    function getSumPowerForEF() as Float {
+        return _sumPowerForEF;
+    }
+    var _validEffortCount as Number = 0;
+    function getValidEffortCount() as Number {
+        return _validEffortCount;
+    }
+    var _rollingNP as Number = 0;
+    function getRollingNormalizedPower() as Number {
+        return _rollingNP;
     }
 
     // Calculated per second, when activity paused, do not compute!
@@ -79,30 +170,30 @@ class TrendEngine {
 
         // Update global NP tracking
         globalNP = calculateNormalizedPower(calculatePower30(power));
-        // System.println(["Global NP", globalNP]);
 
         // 1. Calculate Instantaneous Torque (Nm)
-        var currentTorque = 0.0;
+        var currentTQ = 0.0;
         // 2 * Math.PI / 60 simplifies to a constant of roughly 0.10472
         var angularVelocity = cadence * 0.104719755;
         if (angularVelocity > 0) {
-            currentTorque = power / angularVelocity;
-            if (currentTorque > maxTorque) {
-                maxTorque = currentTorque;
+            currentTQ = power / angularVelocity;
+            if (currentTQ > maxTorque) {
+                maxTorque = currentTQ;
             }
-            // System.println(["Power", power, "angularVelocity", angularVelocity, "Torque", currentTorque]);
+            // System.println(["Power", power, "angularVelocity", angularVelocity, "Torque", currentTQ]);
         }
 
         // 2. Feed the 180-second Rolling Buffers (not ignoring the zeros)
         powerHistory[writeIndex] = power;
         hrHistory[writeIndex] = heartRate;
-        torqueHistory[writeIndex] = currentTorque;
+        torqueHistory[writeIndex] = currentTQ;
 
         writeIndex = (writeIndex + 1) % buffer180;
         if (writeIndex == 0) {
             isBufferFull = true;
         }
         elapsedSeconds++;
+        activitySeconds++;
 
         // 3. Process actual rolling metrics (>Only if we have data)
         var limit = isBufferFull ? buffer180 : writeIndex;
@@ -134,6 +225,9 @@ class TrendEngine {
             }
         }
 
+        _sumPowerForEF = sumPowerForEF;
+        _validEffortCount = validEffortCount;
+
         // Compute Actual 3-Min Averages
         // Pacing (VI) uses the full time window
         var actualPowerGlobal = sumPowerForVI / limit;
@@ -142,48 +236,101 @@ class TrendEngine {
 
         var actualPower;
         var actualHR;
-        var actualTorque;
+        var actualTQ;
         var actualEF;
         // Efficiency (EF) and Mechanics (Torque) only use working seconds
-        if (validEffortCount >= 5) {
+        if (validEffortCount >= smoothingWindowSec) {
+            // was 5
             // Ensure we have a tiny bit of pedaling data
             actualPower = sumPowerForEF / validEffortCount;
             actualHR = sumHRForEF / validEffortCount;
-            actualTorque = sumTorque / validEffortCount;
+            actualTQ = sumTorque / validEffortCount;
             actualEF = actualHR > 0 ? actualPower / actualHR : 0.0;
             previousPower = actualPower;
             previousHR = actualHR;
-            previousTorque = actualTorque;
+            previousTorque = actualTQ;
             previousEF = actualEF;
         } else {
             // If they coasted for almost the entire last 3 minutes,
             // hold the previous valid calculation to prevent diving to 0
             actualPower = previousPower;
             actualHR = previousHR;
-            actualTorque = previousTorque;
+            actualTQ = previousTorque;
             actualEF = previousEF;
         }
 
-        // Approximate rolling VI over the 3-minute window
+        // 1. Capture the absolute max torque smash of the ride
+        if (currentTQ > maxInstantTorque) {
+            maxInstantTorque = currentTQ;
+        }
+
+        // 2. Capture the best sustained 3-minute aerobic efficiency block
+        if (actualEF > peakRollingEF) {
+            peakRollingEF = actualEF;
+        }
+
+        // 3. Capture their most erratic pacing window (highest rolling VI)
+        if (actualVI > maxRollingVI) {
+            maxRollingVI = actualVI;
+        }
+
+        // Check lock now
+        if (lockNowOnLap && hasFirstBaseline) {
+            System.println("Manually locking trend snapshot on lap key press");
+            lockNowOnLap = false; // Reset the flag after locking
+            lockedEF = actualEF;
+            lockedVI = actualVI;
+            lockedTQ = actualTQ;
+            elapsedSeconds = 0; // Reset the block timer to give them a full lock window after manual lock
+
+            if (methodBlockCompleted != null) {
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
+            }
+        }
 
         // 4. THE 3-MINUTE (buffer full) AND 30-MINUTE LOCK TRIGGER
         if (!hasFirstBaseline && isBufferFull) {
             hasFirstBaseline = true;
             lockedEF = actualEF;
             lockedVI = actualVI;
-            lockedTorque = actualTorque;
+            lockedTQ = actualTQ;
             if (methodBlockCompleted != null) {
-                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
-        }
-        else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
+        } else if (elapsedSeconds > 0 && elapsedSeconds % lockStep1800 == 0) {
             System.println("LOCKING TREND SNAPSHOT");
             lockedEF = actualEF;
             lockedVI = actualVI;
-            lockedTorque = actualTorque;
+            lockedTQ = actualTQ;
 
             if (methodBlockCompleted != null) {
-                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTorque]);
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
+            }
+        }
+
+        // Set The Baseline Anchor: Once the rider completes their initial baseline window
+        // (usually after the first 10 to 15 minutes of steady riding),
+        if (
+            !initialEFlocked &&
+            hasFirstBaseline &&
+            (setInitialEF || activitySeconds >= initialEFSeconds)
+        ) {
+            System.println(
+                "Locking initial trend snapshot based on lap key press"
+            );
+            setInitialEF = false;
+            initialEFlocked = true;
+            initialEFlockedAt = activitySeconds;
+            initialEF = actualEF;
+
+            System.println("LOCKING TREND SNAPSHOT");
+            lockedEF = actualEF;
+            lockedVI = actualVI;
+            lockedTQ = actualTQ;
+
+            elapsedSeconds = 0; // Reset the block timer to give them a full lock window after manual lock
+            if (methodBlockCompleted != null) {
+                methodBlockCompleted.invoke([lockedEF, lockedVI, lockedTQ]);
             }
         }
 
@@ -215,13 +362,13 @@ class TrendEngine {
 
             // Torque Trend: Dropping torque at the same power means user is shifting to a spinning cadence
             // A 10% increase at the same power output means their cadence has dropped by roughly 8–10 RPM, meaning they are starting to bog down and drag their legs.
-            if (actualTorque > lockedTorque * 1.1) {
-                trendTorque = -1; // Torque jumped over 10% -> "Mashing"
+            if (actualTQ > lockedTQ * 1.1) {
+                trendTQ = -1; // Torque jumped over 10% -> "Mashing"
             } // Mashing gears too hard (muscle fatigue)
-            else if (actualTorque < lockedTorque * 0.9) {
-                trendTorque = 1; // Torque dropped over 10% -> "Spinning efficiently"
+            else if (actualTQ < lockedTQ * 0.9) {
+                trendTQ = 1; // Torque dropped over 10% -> "Spinning efficiently"
             } else {
-                trendTorque = 0; // Within the stable 10% dead-zone
+                trendTQ = 0; // Within the stable 10% dead-zone
             }
 
             // System.println(
@@ -242,22 +389,15 @@ class TrendEngine {
             // );
             // System.println(
             //     "Locked Torque: " +
-            //         lockedTorque.format("%.2f") +
+            //         lockedTQ.format("%.2f") +
             //         ", Actual Torque: " +
-            //         actualTorque.format("%.2f") +
+            //         actualTQ.format("%.2f") +
             //         ", Trend Torque: " +
-            //         trendTorque
+            //         trendTQ
             // );
         }
 
-        return [
-            actualEF,
-            actualVI,
-            actualTorque,
-            trendEF,
-            trendVI,
-            trendTorque,
-        ];
+        return [actualEF, actualVI, actualTQ, trendEF, trendVI, trendTQ];
     }
 
     function calculateRollingVI(avgPower as Float) as Float {
@@ -333,9 +473,14 @@ class TrendEngine {
     }
 
     function getTrends() as Array<Number> {
-        return [trendEF, trendVI, trendTorque];
+        return [trendEF, trendVI, trendTQ];
     }
-
+    function getMaxValues() as Array<Float> {
+        return [peakRollingEF, maxRollingVI, maxInstantTorque];
+    }
+    function getGlobalInitialEF() as Float {
+        return initialEF;
+    }
     function getElapsedSeconds() as Number {
         return elapsedSeconds;
     }
@@ -360,52 +505,26 @@ class TrendEngine {
         isBufferFull = false;
         hasFirstBaseline = false;
         elapsedSeconds = 0;
+        initialEF = 0.0f;
+        initialEFlockedAt = 0;
+        initialEFlocked = false;
         lockedEF = 0.0f;
         lockedVI = 0.0f;
-        lockedTorque = 0.0f;
+        lockedTQ = 0.0f;
         trendEF = 0;
         trendVI = 0;
-        trendTorque = 0;
-        // Rest global NP tracking
-        // mPowerTicks = 0;
+        trendTQ = 0;
+        // Reset global NP tracking
         globalNP = 0;
     }
 
-    // hidden var mPowerTicks as Number = 0;
-    // hidden function addAverageNP(
-    //     averagePower as Double,
-    //     power as Number or Double
-    // ) as Double {
-    //     // [ avg' * (n-1) + x ] / n
-    //     mPowerTicks = mPowerTicks + 1;
-    //     averagePower =
-    //         (averagePower * (mPowerTicks - 1) + power) / mPowerTicks.toDouble();
-
-    //     // System.println(Lang.format("p $1$ ticks $2$ avg $3$", [power, mPowerTicks, averagePower]));
-    //     return averagePower;
-    // }
-
     // Normalized power
     hidden var mPowerDataPer30Sec as Array<Number> = [] as Array<Number>;
-    hidden var mAvgPowerToFourthPer30Sec as Array<Decimal> =
-        [] as Array<Decimal>;
     hidden var globalNP as Number = 0;
 
-    hidden function calculateNormalizedPower(PowerPer30 as Number) as Number {
-        if (mAvgPowerToFourthPer30Sec.size() >= 30) {
-            mAvgPowerToFourthPer30Sec = mAvgPowerToFourthPer30Sec.slice(1, 30);
-        }
-
-        mAvgPowerToFourthPer30Sec.add(Math.pow(PowerPer30, 4));
-
-        if (mAvgPowerToFourthPer30Sec.size() < 30) {
-            return 0;
-        }
-        var avg = Math.mean(
-            mAvgPowerToFourthPer30Sec as Array<Numeric>
-        ).toDouble();
-        return Math.pow(avg, 0.25).toNumber();
-    }
+    // Low-memory running registers for global NP
+    hidden var mSumPowerToFourth as Double = 0.0d;
+    hidden var mTotalNPSamples as Long = 0l;
 
     hidden function calculatePower30(power as Number) as Number {
         if (mPowerDataPer30Sec.size() >= 30) {
@@ -417,5 +536,22 @@ class TrendEngine {
             return 0;
         }
         return Math.mean(mPowerDataPer30Sec as Array<Numeric>).toNumber();
+    }
+
+    hidden function calculateNormalizedPower(PowerPer30 as Number) as Number {
+        // Only start accumulating data once our initial 30-second buffer fills up
+        if (mPowerDataPer30Sec.size() < 30) {
+            return 0;
+        }
+
+        // Add the current 30s rolling average (raised to the 4th power) to our lifetime total
+        mSumPowerToFourth += Math.pow(PowerPer30, 4);
+        mTotalNPSamples++; // Track total seconds spent calculating NP
+
+        // Calculate the mean over the ENTIRE ride duration
+        var globalAvg = mSumPowerToFourth / mTotalNPSamples;
+
+        // Return the 4th root
+        return Math.pow(globalAvg, 0.25).toNumber();
     }
 }

@@ -25,12 +25,15 @@ class DataFieldSettingsView extends WatchUi.View {
     var version = mySettings.monkeyVersion;
     var versionString = Lang.format("$1$.$2$.$3$", version);
     var partNumber = mySettings.partNumber;
+    var firmwareVersion = mySettings.firmwareVersion;
+    var firmwareVersionString = Lang.format("$1$.$2$", firmwareVersion);
 
     dc.drawText(
       dc.getWidth() / 2,
       dc.getHeight() / 2 - 30,
       Graphics.FONT_SMALL,
-      "Press Menu \nfor settings\nCIQ " + versionString + "\nDevice " + partNumber,
+      "Press Menu \nfor settings\nCIQ " + versionString + "\nDevice " + partNumber
+      + "\nFirmware " + firmwareVersionString,
       Graphics.TEXT_JUSTIFY_CENTER
     );
   }
@@ -49,25 +52,28 @@ class DataFieldSettingsDelegate extends WatchUi.BehaviorDelegate {
     var menu = new $.DataFieldSettingsMenu();
     var mi;
     
-    mi = new WatchUi.MenuItem("Advanced", null, "advanced", null);
+    mi = new WatchUi.MenuItem("Alerts", null, "alerts", null);
+    menu.addItem(mi);
+    
+    mi = new WatchUi.MenuItem("Lock data", null, "lock_data", null);
     menu.addItem(mi);
 
-    // mi = new WatchUi.MenuItem("Large field", null, "large_field", null);
-    // menu.addItem(mi);
-    // mi = new WatchUi.MenuItem("Wide field", null, "wide_field", null);
-    // menu.addItem(mi);
-    // mi = new WatchUi.MenuItem("Small field", null, "small_field", null);
-    // menu.addItem(mi);
+    mi = new WatchUi.MenuItem("Colors", null, "colors", null);
+    menu.addItem(mi);
+    
     
     var boolean = false;
 
-    boolean = Storage.getValue("demoMode") ? false : false;
+    boolean = $.getStorageValue("demoMode", false) as Boolean;
     menu.addItem(new WatchUi.ToggleMenuItem("Demo", null, "demoMode", boolean, null));
 
-    boolean = Storage.getValue("debugMode") ? false : false;
+    boolean = $.getStorageValue("debugMode", false) as Boolean;
     menu.addItem(new WatchUi.ToggleMenuItem("Debug", null, "debugMode", boolean, null));
 
-    boolean = Storage.getValue("resetDefaults") ? false : false;
+    boolean = $.getStorageValue("showPauseScreen", true) as Boolean;
+    menu.addItem(new WatchUi.ToggleMenuItem("Show Pause Screen", null, "showPauseScreen", boolean, null));
+
+    boolean = $.getStorageValue("resetDefaults", false) as Boolean;
     menu.addItem(new WatchUi.ToggleMenuItem("Reset", null, "resetDefaults", boolean, null));
 
     var view = new $.DataFieldSettingsView();

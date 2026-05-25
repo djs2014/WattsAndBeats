@@ -1,3 +1,4 @@
+// Version: 2026-05-20 EdgeClass
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
@@ -20,6 +21,10 @@ function getEdgeVersion() as Number {
 
   if (settings.screenWidth >= 480 && settings.screenHeight >= 800) {
     $.EdgeVersion = 1050;
+    return $.EdgeVersion;
+  }
+  if (settings.screenWidth >= 420 && settings.screenHeight >= 600) {
+    $.EdgeVersion = 850;
     return $.EdgeVersion;
   }
 

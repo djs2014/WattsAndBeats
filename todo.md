@@ -1,36 +1,76 @@
-readme
+sync field_utils
 
-beep or toast on warning
-get nice png files for ef,vi,tq
-demo -> calc average power / average cadence
--> sep class for global data or in trendengine?
 
-set lockwindow
-set different block window 10 - 60 minutes
 
-x reset to defaults 30
 
-layout: EF trend  actual value
+readme: demo -> set smooth window to 20?
+firstBlockEF == initialEF
+
+
+
+settings: warning / show progressbar until warning reached.
+-> max duration EF warning (default 5min is max)
+-> TQ max duration 
+-> VI -> smooth out in kilometers max is 1 km ..
+
+setting: on lap key: lock new baseline (after x sec)
+    If a rider cruises through a 20-minute valley flat and then suddenly hits the base of a massive alpine climb, they can press the Lap Key.
+
+    Your app will immediately overwrite the old flat-land baseline variables with their current 3-minute rolling actuals as they begin the climb. Their trend indicators and arrows will instantly recalibrate to show how well they are managing their mechanical efficiency specifically up the mountain, ignoring the preceding recovery valley.
+
+
+
+update readme
 EF  Metabolic economy, fuel efficiency, heart-to-watt connection. $\heartsuit \rightarrow \lightning$
 VI Smoothness, pacing discipline, tracking surges vs. steady riding. ~ line or target/bullseye
 TQ Rotational force, muscle grinding, pure crank pressure. paired with a Circular Vector Arrow ($\circlearrowright$) or a Wrench/Gear.
-    arc 
-
--- layout 2
-
-[ 📈 EF ]      [ 🎯 VI ]      [ ↻ TQ ]   <-- Clean Icons + Labels in Header
-  ----------------------------------------
-     1.48           1.02           18.5     <-- Moving Actuals
-     1.55 •         1.01 •         16.2 •   <-- Baselines + Trend Dots
 
 
+-> MAX values on pause screen
+
+TQ
+Max Torque ($TQ_{max}$) — EssentialWhy it's great: This is the ultimate bragging-rights metric for a cyclist. It represents the absolute maximum raw muscular force they smashed into the pedals (e.g., during a massive sprint or a steep out-of-the-saddle kick).How to track it: Simply update a global variable whenever the instantaneous torque exceeding the current max.
+
+
+EF
+Max Efficiency Factor ($EF_{max}$) — Skip It (Use a Peak Buffer)
+Do: Track the Peak 3-Minute Rolling EF. This represents the best, most sustained aerobic block of the entire ride.
+
+VI:
+Track Global Session VI (to show overall pacing discipline) and highlight Max Power instead.
+
+
+[ RIDE SUMMARY (PAUSED) ]
+  -------------------------------------------------------------
+  METRIC    |   AVG    |   PEAK   |  INTERPRETATION
+  -------------------------------------------------------------
+  EF        |   1.48   |   1.22   |  🔴 Decoupling detected (-17.5%)
+  VI        |   1.03   |   1.18   |  🟢 Excellent Global Pacing
+  TQ        |  24.2 Nm |  68.1 Nm |  🟡 High Peak Muscle Strain
+
+
+
+---
+// 1. Capture the absolute max torque smash of the ride
+if (currentTQ > maxInstantTorque) {
+    maxInstantTorque = currentTQ;
+}
+
+// 2. Capture the best sustained 3-minute aerobic efficiency block
+if (actualEF > peakRollingEF) {
+    peakRollingEF = actualEF;
+}
+
+// 3. Capture their most erratic pacing window (highest rolling VI)
+if (actualVI > maxRollingVI) {
+    maxRollingVI = actualVI;
+}
+---
 
 Stats:
 1. What Stats Matter Most When Paused?When a cyclist pulls over for a break or a traffic light, they don't want to look at a 3-minute rolling average. They want to check their overall macro trends for the entire ride so far:Aerobic Decoupling ($EF\text{ Drop}$): The ultimate endurance metric. Compare their very first 30-minute baseline block to their most recent completed 30-minute block. If it has dropped by $12\%$, their cardio system is heavily fatiguing.Global VI: Their pacing score for the whole ride.Average Torque: The total muscular work done per pedal stroke across the ride.
 
 Tracking the First and Last Blocks in Code
-
-To calculate the overall $EF$ drop, your compute logic needs to remember the very first baseline established at minute 3, and constantly update a variable with the most recent baseline.Add these tracking variables at the class level:
 
 var firstBlockEF = 0.0;
 var latestBlockEF = 0.0;
@@ -60,7 +100,7 @@ EF Indicator: If trendEF == -1, draw a Red Down Arrow $\downarrow$ next to the E
 
 VI Indicator: If trendVI == -1, draw a Yellow Warning Mark or make the background yellow. This indicates they are surging too hard on hills compared to their first 30 minutes.
 
-Torque Indicator: If trendTorque == -1, show an Up Arrow $\uparrow$. This lets the rider know their leg force is significantly higher than their baseline, warning them that they are entering a muscular fatigue zone and should spin a lighter gear.
+Torque Indicator: If trendTQ == -1, show an Up Arrow $\uparrow$. This lets the rider know their leg force is significantly higher than their baseline, warning them that they are entering a muscular fatigue zone and should spin a lighter gear.
 
 Handling the First 30 Minutes
 
@@ -96,9 +136,9 @@ Trend Value,Meaning,Recommended Icon,Recommended Text Color
 
 TQ
 
-How to use trendTorque = 1 in the UIOn the Garmin screen, this gives the rider incredibly useful feedback:
-trendTorque = -1 (Red Up Arrow $\uparrow$): "Warning: Your leg force is getting too heavy. Shift down and spin faster to save your muscles."trendTorque = 0 (Neutral Dot or Dash ─): "You are maintaining the same pedaling style as your baseline.
-"trendTorque = 1 (Green Down Arrow $\downarrow$): "Great job: You've dropped your torque load. You are relying on your cardio system rather than killing your legs."
+How to use trendTQ = 1 in the UIOn the Garmin screen, this gives the rider incredibly useful feedback:
+trendTQ = -1 (Red Up Arrow $\uparrow$): "Warning: Your leg force is getting too heavy. Shift down and spin faster to save your muscles."trendTQ = 0 (Neutral Dot or Dash ─): "You are maintaining the same pedaling style as your baseline.
+"trendTQ = 1 (Green Down Arrow $\downarrow$): "Great job: You've dropped your torque load. You are relying on your cardio system rather than killing your legs."
 
 trendVI = 1
 trendVI = 0
@@ -128,4 +168,28 @@ The Rule of Thumb for your App:
 For standard endurance riding, lower torque at the same power is better because it protects the muscles from fatigue.
 
 If your app displays an actual torque value that is 10% higher than the locked 30-minute baseline, it warns the rider to change gears. It means they have dropped their cadence and are creating a "grinding" scenario that will prematurely burn out their legs.
+
+
+
+
+funny
+if (alertState == ALERT_VI) {
+    // Make it pulse using the native clock system time seconds!
+    var seconds = System.getClockTime().sec;
+    if (seconds % 2 == 0) {
+        dc.setColor(Graphics.COLOR_YELLOW, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(2);
+        dc.drawRoundedRectangle((col2X - 32).toNumber(), (actualsY - 22).toNumber(), 64, 44, 6);
+    }
+}
+
+
+# The Alert Severity Matrix
+
+Metric,Urgency Level,Danger Profile,Best Alert Color
+EF (Efficiency),🔴 CRITICAL (Red),Aerobic decoupling/bonking. A sudden drop means cardiac drift is spiking relative to output.,Graphics.COLOR_RED
+TQ (Torque),🟠 HIGH (Orange/Yellow),"Neuromuscular fatigue, chain snapping, or leg blowout from grinding too heavy a gear.",Graphics.COLOR_ORANGE(or COLOR_YELLOW)
+VI (Variability),🟡 WARNING (Yellow),"Tactical pacing error. Surging too hard on hills, but fixable over the next few minutes.",Graphics.COLOR_YELLOW
+
+Why This Hierarchy Works Physically1. EF (Efficiency Factor) = 🔴 Red AlertThe Threat: If a rider's EF collapses, they are blowing up aerobically. Their heart rate is skyrocketing while their power output is dropping.The Action: They need to back off immediately, eat carbs, and lower their core temperature. If they ignore a red EF block for more than 5 minutes, their entire ride is toast.2. TQ (Torque) = 🟠 Orange AlertThe Threat: High torque spikes mean the rider is smashing the pedals at a low cadence (grinding). This rapidly drains anaerobic glycogen stores and destroys the knee joints.The Action: They don't necessarily need to slow down, but they need to shift gears immediately to spin a higher cadence. Orange signals a mechanical/neuromuscular adjustment.3. VI (Variability Index) = 🟡 Yellow AlertThe Threat: A high VI (e.g., $> 1.05$ on a steady endurance ride) means the rider is burning matches by surging up short rollers and coasting down the other side.The Action: This is a systemic pacing warning. It takes time for VI to creep up, and it takes time to smooth it back out. Yellow tells them to "smooth out the pedal strokes over the next couple of kilometers."
 
