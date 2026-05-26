@@ -18,6 +18,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
 
     hidden var mCycloData as CycloData = new CycloData();
     hidden var mActivityStarted as Boolean = false;
+    hidden var mActivityStopped as Boolean = false;
     hidden var mBlockCompletedCounter as Number = 0;
 
     hidden var mFirstBlockEF as Float = -1.0f;
@@ -81,7 +82,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mPaused =
                 info.timerState == Activity.TIMER_STATE_PAUSED or
                 info.timerState == Activity.TIMER_STATE_OFF;
-
+            mActivityStopped = info.timerState == Activity.TIMER_STATE_STOPPED;    
             if (!mActivityStarted) {
                 mActivityStarted = info.timerState != Activity.TIMER_STATE_OFF;
                 if (mActivityStarted) {
@@ -99,7 +100,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mActivityStarted and
                 info.timerState == Activity.TIMER_STATE_OFF
             ) {
-                System.println("Activity stopped");
+                System.println("Activity ended");
                 mActivityStarted = false;
             }
         }
@@ -275,7 +276,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return;
         }
 
-        if (mPaused && mActivityStarted && $.gShowPauseScreen) {
+        if (mPaused && mActivityStarted && $.gShowPauseScreen || mActivityStopped && $.gShowPauseScreen) {
             drawPausedState(dc);
             return;
         }
@@ -334,7 +335,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 width / 2,
                 titleY,
                 fSmall,
-                "RIDE SUMMARY (PAUSED)",
+                "RIDE SUMMARY" + (mActivityStopped ? " (STOPPED)" : " (PAUSED)"),
                 Graphics.TEXT_JUSTIFY_CENTER
             );
         }
@@ -509,6 +510,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var locked = mCycloData.Locked;
 
         // 0. DRAW THE BOTTOM WARNING/PROGRESS BAR - so its in the background.
+        // Get warning color background and text
         updateWarningMessage(trendEF, trendVI, trendTQ);
 
         var hasWarning = mWarningMessage.length() > 0;
@@ -525,12 +527,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
             dc.fillRectangle(0, barY, width, barHeight);
 
             // Use dark text on light alerts (Yellow) and white text on Red alerts
-            if (mWarningColor == Graphics.COLOR_YELLOW) {
-                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-            } else {
-                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            }
-        } else if (mActivityStarted){
+            dc.setColor(mWarningTextColor, Graphics.COLOR_TRANSPARENT);
+        } else if (mActivityStarted) {
             dc.setColor(color[:header], Graphics.COLOR_TRANSPARENT);
             // Get progress until next block as a time
             infoMessage =
@@ -821,9 +819,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var warningPillY = (height * 0.05).toNumber();
         var warningPillWidth = (width * 0.3).toNumber();
         var warningPillHeight =
-            height - barHeight - (warningPillY * 2).toNumber();
-        // var warningPillY = (height * 0.3).toNumber();
-
+            height - barHeight - (warningPillY * 1.7).toNumber();
+        var warningPillHeightFocused = height - barHeight - warningPillY;;
+        
         var criticalTextColor = $.gTextWhiteOnRed
             ? Graphics.COLOR_WHITE
             : Graphics.COLOR_BLACK;
@@ -865,7 +863,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col1X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                warningPillHeight
+                mWarningTrendFocus == TFEF ? warningPillHeightFocused : warningPillHeight
             );
         }
         if (VIwarning) {
@@ -875,7 +873,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col2X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                warningPillHeight
+                mWarningTrendFocus == TFVI ? warningPillHeightFocused : warningPillHeight
             );
         }
         if (TQwarning) {
@@ -885,7 +883,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col3X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                warningPillHeight
+                mWarningTrendFocus == TFTQ ? warningPillHeightFocused : warningPillHeight
             );
         }
         var fontHeight = dc.getFontHeight(headerFont);
@@ -1461,6 +1459,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
     // Class-level string variable
     var mWarningMessage = "";
     var mWarningColor = Graphics.COLOR_LT_GRAY;
+    var mWarningTextColor = Graphics.COLOR_BLACK;
+    var mWarningTrendFocus = TFNone;
 
     function updateWarningMessage(
         trendEF as Number,
@@ -1476,21 +1476,34 @@ class WattsAndBeatsView extends WatchUi.DataField {
         if (trendEF == -1) {
             mWarningMessage = "DECOUPLING DETECTED:" + sep + "HYDRATE & PACE";
             mWarningColor = mColorCritical;
+            mWarningTextColor = $.gTextWhiteOnRed
+                ? Graphics.COLOR_WHITE
+                : Graphics.COLOR_BLACK;
+            mWarningTrendFocus = TFEF;
         }
         // Priority 2: High Muscle Strain (Torque too high)
         else if (trendTQ == -1) {
             mWarningMessage = "LEGS MASHING:" + sep + "SHIFT DOWN & SPIN";
             mWarningColor = mColorHigh;
+            mWarningTextColor = $.gTextWhiteOnOrange
+                ? Graphics.COLOR_WHITE
+                : Graphics.COLOR_BLACK;
+            mWarningTrendFocus = TFTQ;
         }
         // Priority 3: Erratic pacing (VI spiking)
         else if (trendVI == -1) {
             mWarningMessage = "BURNING MATCHES:" + sep + "SMOOTH EFFORT";
             mWarningColor = mColorWarning;
+            mWarningTextColor = $.gTextWhiteOnYellow
+                ? Graphics.COLOR_WHITE
+                : Graphics.COLOR_BLACK;
+            mWarningTrendFocus = TFVI;
         }
         // Default State
         else {
             mWarningMessage = "";
             mWarningColor = mColorNeutral;
+            mWarningTrendFocus = TFNone;
         }
     }
 
@@ -1970,4 +1983,11 @@ class CycloData {
             "Nm"
         );
     }
+}
+
+enum TrendFocus {
+    TFNone = 0,
+    TFEF = 1,
+    TFVI = 2,
+    TFTQ = 3,
 }

@@ -1,7 +1,11 @@
 sync field_utils
 
+x alert message bar white/black font
+leading alert -> bottom to messagebar length?
+show stats after ride -> save storage and display
 
-
+updateWarningMessage -> dictionaryresult
++ trendfocus EF/VI/TQ/None 
 
 readme: demo -> set smooth window to 20?
 firstBlockEF == initialEF
