@@ -82,7 +82,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             mPaused =
                 info.timerState == Activity.TIMER_STATE_PAUSED or
                 info.timerState == Activity.TIMER_STATE_OFF;
-            mActivityStopped = info.timerState == Activity.TIMER_STATE_STOPPED;    
+            mActivityStopped = info.timerState == Activity.TIMER_STATE_STOPPED;
             if (!mActivityStarted) {
                 mActivityStarted = info.timerState != Activity.TIMER_STATE_OFF;
                 if (mActivityStarted) {
@@ -93,6 +93,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                             "Activity started - resetting trend engine"
                         );
                         mTrendEngine.reset();
+                        mTrendEnginStarted = false;
                         mCycloData = new CycloData();
                     }
                 }
@@ -136,6 +137,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
             processTrendEngine(info);
         }
         if (!mPaused) {
+            startTrendEngineAfterSafeZone(info);
             evaluateAlertEscalations(info);
         }
     }
@@ -159,13 +161,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
     }
 
     function onTimerLap() as Void {
-        System.println("Lap event triggered");
-        if ($.gInitialEFOnLap) {
-            var locked = mTrendEngine.lockInitialEF();
-            if (locked) {
-                System.println("Initial locked on lap");
-            }
-        }
+        System.println("Lap event triggered");        
         if ($.gLockOnAutoLap) {
             var locked = mTrendEngine.lockNow();
             if (locked) {
@@ -225,6 +221,7 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 mTrendEngine.setDemo(false);
                 mTrendEngine.setLockWindowSec($.gLockIntervalSec);
                 mTrendEngine.reset();
+                mTrendEnginStarted = false;
             }
         }
         var data = mTrendEngine.compute(cadence, power, heartRate);
@@ -276,7 +273,10 @@ class WattsAndBeatsView extends WatchUi.DataField {
             return;
         }
 
-        if (mPaused && mActivityStarted && $.gShowPauseScreen || mActivityStopped && $.gShowPauseScreen) {
+        if (
+            (mPaused && mActivityStarted && $.gShowPauseScreen) ||
+            (mActivityStopped && $.gShowPauseScreen)
+        ) {
             drawPausedState(dc);
             return;
         }
@@ -335,7 +335,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 width / 2,
                 titleY,
                 fSmall,
-                "RIDE SUMMARY" + (mActivityStopped ? " (STOPPED)" : " (PAUSED)"),
+                "RIDE SUMMARY" +
+                    (mActivityStopped ? " (STOPPED)" : " (PAUSED)"),
                 Graphics.TEXT_JUSTIFY_CENTER
             );
         }
@@ -820,8 +821,8 @@ class WattsAndBeatsView extends WatchUi.DataField {
         var warningPillWidth = (width * 0.3).toNumber();
         var warningPillHeight =
             height - barHeight - (warningPillY * 1.7).toNumber();
-        var warningPillHeightFocused = height - barHeight - warningPillY;;
-        
+        var warningPillHeightFocused = height - barHeight - warningPillY;
+
         var criticalTextColor = $.gTextWhiteOnRed
             ? Graphics.COLOR_WHITE
             : Graphics.COLOR_BLACK;
@@ -863,7 +864,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col1X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                mWarningTrendFocus == TFEF ? warningPillHeightFocused : warningPillHeight
+                mWarningTrendFocus == TFEF
+                    ? warningPillHeightFocused
+                    : warningPillHeight
             );
         }
         if (VIwarning) {
@@ -873,7 +876,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col2X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                mWarningTrendFocus == TFVI ? warningPillHeightFocused : warningPillHeight
+                mWarningTrendFocus == TFVI
+                    ? warningPillHeightFocused
+                    : warningPillHeight
             );
         }
         if (TQwarning) {
@@ -883,7 +888,9 @@ class WattsAndBeatsView extends WatchUi.DataField {
                 col3X - warningPillWidth / 2,
                 warningPillY,
                 warningPillWidth,
-                mWarningTrendFocus == TFTQ ? warningPillHeightFocused : warningPillHeight
+                mWarningTrendFocus == TFTQ
+                    ? warningPillHeightFocused
+                    : warningPillHeight
             );
         }
         var fontHeight = dc.getFontHeight(headerFont);
@@ -1794,7 +1801,20 @@ class WattsAndBeatsView extends WatchUi.DataField {
             Graphics.TEXT_JUSTIFY_CENTER
         );
     }
+    hidden var mTrendEnginStarted as Boolean = false;
 
+    function startTrendEngineAfterSafeZone(info as Activity.Info) as Void {
+        if (mTrendEnginStarted || stillInSafeZone(info)) {
+            return;
+        }
+        System.println(
+            "Safe zone elapsed. Starting trend engine calculations."
+        );        
+        mTrendEnginStarted = mTrendEngine.lockInitialEF();
+        if (mTrendEnginStarted) {
+            System.println("Trend engine started.");
+        }
+    }
     // Set your threshold limits (e.g., 3 minutes = 180 seconds)
     const ESCALATION_THRESHOLD_SEC = 180; // TODO setting
 
@@ -1802,6 +1822,17 @@ class WattsAndBeatsView extends WatchUi.DataField {
     hidden var mViWarningSeconds as Number = 0;
     hidden var mTqWarningSeconds as Number = 0;
 
+    function stillInSafeZone(info as Activity.Info) as Boolean {
+        var elapsedSec =
+            ($.getActivityValue(info, :timerTime, 0) as Number) / 1000; // Convert to seconds
+        var elapsedDistanceMeter =
+            $.getActivityValue(info, :elapsedDistance, 0.0f) as Float;
+
+        return (
+            elapsedSec < $.gUrbanGateTimeSec &&
+            elapsedDistanceMeter < $.gUrbanGateDistanceMeter
+        );
+    }
     function evaluateAlertEscalations(info as Activity.Info) as Void {
         var trendEF = mCycloData.TrendEF;
         var trendVI = mCycloData.TrendVI;

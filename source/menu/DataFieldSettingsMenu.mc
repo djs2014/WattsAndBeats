@@ -49,30 +49,21 @@ class DataFieldSettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
         null
       );
       mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
-      lockMenu.addItem(mi);
-
-      mi = new WatchUi.MenuItem(
-        "Initial EF at sec|180~",
-        null,
-        "initial_ef_sec",
-        null
-      );
-      mi.setSubLabel($.getStorageNumberAsString(mi.getId() as String));
-      lockMenu.addItem(mi);
+      lockMenu.addItem(mi);     
 
       var boolean;
-      boolean = $.getStorageValue("initial_ef_on_lap", true) as Boolean;
-      lockMenu.addItem(
-        new WatchUi.ToggleMenuItem(
-          "Initial EF on 1st lap",
-          null,
-          "initial_ef_on_lap",
-          boolean,
-          null
-        )
-      );
-
-      var boolean;
+      
+      // boolean = $.getStorageValue("start_on_urban_gate_end", true) as Boolean;
+      // lockMenu.addItem(
+      //   new WatchUi.ToggleMenuItem(
+      //     "Start after safe zone",
+      //     null,
+      //     "start_on_urban_gate_end",
+      //     boolean,
+      //     null
+      //   )
+      // );
+      
       // ?? doesn't work on edge 1050?
       // boolean = $.getStorageValue("lock_onlapkey", false) as Boolean;
       // lockMenu.addItem(

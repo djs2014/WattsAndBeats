@@ -39,14 +39,18 @@ class WattsAndBeatsApp extends Application.AppBase {
             $.StorageSetValue("VI_warning_threshold_sec", 300); // 5 minutes
             $.StorageSetValue("TQ_warning_threshold_sec", 600); // 10 minutes
         }
+
+        if ($.getStorageValue("initial_ef_on_lap", null) != null) {
+            Storage.deleteValue("initial_ef_on_lap");
+            Storage.deleteValue("initial_ef_sec");
+        }
+
         var reset = $.getStorageValue("resetDefaults", null);
         if (reset == null || (reset as Boolean)) {
             $.StorageSetValue("resetDefaults", false);
             $.StorageSetValue("lock_interval_sec", 1800);
             $.StorageSetValue("smoothing_window_sec", 20);
-            $.StorageSetValue("initial_ef_sec", 900);
-            $.StorageSetValue("initial_ef_on_lap", false);
-
+            
             $.StorageSetValue("demoMode", false);
             $.StorageSetValue("debugMode", false);
             // $.StorageSetValue("lock_onlapkey", false);
@@ -80,7 +84,7 @@ class WattsAndBeatsApp extends Application.AppBase {
         // TODO $.gLockOnLapKey = $.getStorageValue("lock_onlapkey", false) as Boolean;
         $.gLockOnAutoLap = $.getStorageValue("lock_onautolap", true) as Boolean;
         $.gBeepOnLock = $.getStorageValue("beep_onlock", false) as Boolean;
-
+       
         $.gUrbanGateDistanceMeter =
             $.getStorageValue("Urban_gate_distance_m", 5000) as Number;
         $.gUrbanGateTimeSec =
@@ -128,13 +132,7 @@ class WattsAndBeatsApp extends Application.AppBase {
         var actualSmoothingWindowSec = trendEngine.getSmoothingWindowSec();
         if (actualSmoothingWindowSec != smoothingWindowSec) {
             $.StorageSetValue("smoothing_window_sec", actualSmoothingWindowSec);
-        }
-
-        var initialEFSec = $.getStorageValue("initial_ef_sec", 900) as Number;
-        trendEngine.setInitialEFSec(initialEFSec);
-
-        $.gInitialEFOnLap =
-            $.getStorageValue("initial_ef_on_lap", false) as Boolean;
+        }      
 
         var demo = $.getStorageValue("demoMode", false) as Boolean;
         if (demo != trendEngine.isDemo()) {
@@ -169,8 +167,6 @@ var gShowPauseScreen as Boolean = true;
 var gLockOnLapKey as Boolean = false;
 var gLockOnAutoLap as Boolean = true;
 var gLockIntervalSec as Number = 1800;
-var gInitialEFOnLap as Boolean = false;
-
 var gUrbanGateDistanceMeter as Number = 5000;
 var gUrbanGateTimeSec as Number = 900;
 var gBeepOnLock as Boolean = false;

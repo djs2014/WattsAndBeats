@@ -30,10 +30,8 @@ class TrendEngine {
     var lockNowOnLap as Boolean = false;
 
     // When to set initialEF
-    var initialEFSeconds as Number = 900; // 15 minutes
     var setInitialEF as Boolean = false;
     //
-    var initialEFlocked as Boolean = false;
     var initialEF as Float = 0.0f;
     var initialEFlockedAt as Number = 0; // Timestamp of when the initial EF was locked
 
@@ -97,12 +95,7 @@ class TrendEngine {
         }
         lockStep1800 = lockWindowSec;
     }
-    function setInitialEFSec(initialEFSec as Number) as Void {
-        if (initialEFSec < buffer180) {
-            initialEFSec = buffer180;
-        }
-        initialEFSeconds = initialEFSec;
-    }
+   
     function getInitialEFlockedAt() as Number {
         return initialEFlockedAt;
     }
@@ -122,12 +115,7 @@ class TrendEngine {
             );
             return false;
         }
-        if (initialEFlocked) {
-            System.println(
-                "Initial trend snapshot has already been locked, cannot lock again"
-            );
-            return false;
-        }
+        
         setInitialEF = true;
         return true;
     }
@@ -310,20 +298,15 @@ class TrendEngine {
 
         // Set The Baseline Anchor: Once the rider completes their initial baseline window
         // (usually after the first 10 to 15 minutes of steady riding),
-        if (
-            !initialEFlocked &&
+        if (            
             hasFirstBaseline &&
-            (setInitialEF || activitySeconds >= initialEFSeconds)
-        ) {
-            System.println(
-                "Locking initial trend snapshot based on lap key press"
-            );
-            setInitialEF = false;
-            initialEFlocked = true;
+            setInitialEF 
+        ) {            
+            setInitialEF = false;            
             initialEFlockedAt = activitySeconds;
             initialEF = actualEF;
 
-            System.println("LOCKING TREND SNAPSHOT");
+            System.println("LOCKING INITIALTREND SNAPSHOT");
             lockedEF = actualEF;
             lockedVI = actualVI;
             lockedTQ = actualTQ;
@@ -506,8 +489,7 @@ class TrendEngine {
         hasFirstBaseline = false;
         elapsedSeconds = 0;
         initialEF = 0.0f;
-        initialEFlockedAt = 0;
-        initialEFlocked = false;
+        initialEFlockedAt = 0;        
         lockedEF = 0.0f;
         lockedVI = 0.0f;
         lockedTQ = 0.0f;
